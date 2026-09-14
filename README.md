@@ -7,6 +7,30 @@ A fast, atmospheric browser game about weaving through a collapsing starfield. C
 No build step or dependencies are required. The server must be started **from the
 folder containing `index.html`**, not from a system folder.
 
+### Download the game correctly
+
+Do not use the browser's **Save page as** command on each GitHub file. That saves
+GitHub's web page instead of the source file and may change extensions such as
+`styles.css` to `styles.htm`.
+
+Use one of these methods instead:
+
+- On the repository page, select **Code → Download ZIP**, extract the ZIP, and
+  open the extracted folder.
+- If Git is installed, run:
+
+  ```powershell
+  git clone --branch work https://github.com/smmoulder/game.git C:\Starweaver
+  cd C:\Starweaver
+  ```
+
+The folder should contain files named exactly `index.html`, `styles.css`,
+`game.js`, and `README.md`. In PowerShell, verify them with:
+
+```powershell
+Get-ChildItem index.html, styles.css, game.js
+```
+
 ### Windows PowerShell
 
 1. Download or clone this repository and switch to the `work` branch.
@@ -43,7 +67,11 @@ Then open <http://localhost:8000>.
 
 > If the browser shows a directory listing or “file not found,” stop the server
 > with `Ctrl+C`, navigate to the folder containing `index.html`, and run the
-> command again. A lone `favicon.ico` 404 in the terminal is harmless.
+> command again. A 404 only means that a browser tab or extension requested a URL
+> that is not in this folder; it does not mean Python itself failed. Requests such
+> as `/_filter/organizations` or `/_filter/repositories` are not made by
+> Starweaver—close other tabs using `localhost:8000`, or try another port with
+> `py -m http.server 8080` and open <http://localhost:8080>.
 
 ## Controls
 
