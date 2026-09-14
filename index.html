@@ -33,8 +33,10 @@
         <div class="hud" aria-live="polite">
           <div class="stat"><span>Score</span><strong id="score">0000</strong></div>
           <div class="stat stat-center"><span>Time</span><strong id="time">45</strong></div>
+          <div class="stat stat-center"><span>Hull</span><strong class="lives" id="lives" aria-label="3 hull points">◆ ◆ ◆</strong></div>
           <div class="stat stat-right"><span>Best</span><strong id="best">0000</strong></div>
         </div>
+        <div class="time-track" aria-hidden="true"><span id="timeProgress"></span></div>
 
         <div class="canvas-wrap">
           <canvas id="gameCanvas" aria-label="Starweaver game area"></canvas>
@@ -42,7 +44,7 @@
             <div class="sigil">✦</div>
             <p class="overlay-kicker">The constellation is fading</p>
             <h2>READY TO WEAVE?</h2>
-            <p>Collect the <b>golden sparks</b>.<br />Avoid the <b class="danger-text">void shards</b>.</p>
+            <p>Collect <b>golden sparks</b> to build a streak.<br />Three <b class="danger-text">void shard</b> hits end the run.</p>
             <button class="primary-button" id="startButton" type="button">Begin the run <span>→</span></button>
             <span class="key-hint">Press space to start</span>
           </div>
@@ -51,7 +53,7 @@
             <p class="overlay-kicker">Run complete</p>
             <h2 id="endTitle">THE LIGHT REMEMBERS</h2>
             <div class="result-row"><span>Final score</span><strong id="finalScore">0000</strong></div>
-            <div class="result-row"><span>Best streak</span><strong id="finalStreak">×1</strong></div>
+            <div class="result-row"><span>Best multiplier</span><strong id="finalStreak">×1</strong></div>
             <button class="primary-button" id="restartButton" type="button">Weave again <span>↻</span></button>
           </div>
 
