@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080914" />
+    <meta name="description" content="Starweaver — a tiny arcade game about collecting light and escaping the void." />
+    <title>Starweaver</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Starweaver home">
+          <span class="brand-mark">✦</span>
+          <span>STARWEAVER</span>
+        </a>
+        <button class="icon-button" id="soundButton" type="button" aria-label="Turn sound on" aria-pressed="false">
+          <span id="soundIcon">♪</span>
+        </button>
+      </header>
+
+      <section class="hero">
+        <div class="eyebrow"><span></span> A pocket arcade odyssey</div>
+        <h1>CHASE THE LIGHT.<br /><em>OUTRUN THE VOID.</em></h1>
+        <p>Thread your ship through a dying constellation. Gather starlight, keep your streak alive, and don't look back.</p>
+      </section>
+
+      <section class="game-card" id="gameCard">
+        <div class="hud" aria-live="polite">
+          <div class="stat"><span>Score</span><strong id="score">0000</strong></div>
+          <div class="stat stat-center"><span>Time</span><strong id="time">45</strong></div>
+          <div class="stat stat-right"><span>Best</span><strong id="best">0000</strong></div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="gameCanvas" aria-label="Starweaver game area"></canvas>
+          <div class="overlay visible" id="startOverlay">
+            <div class="sigil">✦</div>
+            <p class="overlay-kicker">The constellation is fading</p>
+            <h2>READY TO WEAVE?</h2>
+            <p>Collect the <b>golden sparks</b>.<br />Avoid the <b class="danger-text">void shards</b>.</p>
+            <button class="primary-button" id="startButton" type="button">Begin the run <span>→</span></button>
+            <span class="key-hint">Press space to start</span>
+          </div>
+
+          <div class="overlay" id="endOverlay">
+            <p class="overlay-kicker">Run complete</p>
+            <h2 id="endTitle">THE LIGHT REMEMBERS</h2>
+            <div class="result-row"><span>Final score</span><strong id="finalScore">0000</strong></div>
+            <div class="result-row"><span>Best streak</span><strong id="finalStreak">×1</strong></div>
+            <button class="primary-button" id="restartButton" type="button">Weave again <span>↻</span></button>
+          </div>
+
+          <div class="pause-badge" id="pauseBadge">Paused</div>
+          <div class="combo" id="combo">×2 STREAK</div>
+        </div>
+
+        <div class="controls">
+          <div class="control-copy"><span>Move</span><kbd>A</kbd><kbd>←</kbd><span class="divider">/</span><kbd>D</kbd><kbd>→</kbd></div>
+          <button class="pause-button" id="pauseButton" type="button" aria-label="Pause game"><span>Ⅱ</span> Pause</button>
+        </div>
+      </section>
+
+      <div class="mobile-controls" aria-label="Touch controls">
+        <button id="leftButton" type="button" aria-label="Move left">←</button>
+        <button id="rightButton" type="button" aria-label="Move right">→</button>
+      </div>
+
+      <footer><span>✦</span> Woven for the quiet moments between worlds <span>✦</span></footer>
+    </main>
+    <script src="game.js"></script>
+  </body>
+</html>
