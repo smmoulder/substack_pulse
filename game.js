@@ -17,7 +17,7 @@
     paused: false,
     sound: false,
     score: 0,
-    best: Number(localStorage.getItem('starweaver-best') || 0),
+    best: readBestScore(),
     time: ROUND_SECONDS,
     lives: MAX_LIVES,
     streak: 0,
@@ -79,7 +79,7 @@
     state.running = false;
     if (state.score > state.best) {
       state.best = state.score;
-      localStorage.setItem('starweaver-best', state.best);
+      saveBestScore(state.best);
       ui.endTitle.textContent = 'A NEW CONSTELLATION';
     } else {
       ui.endTitle.textContent = reason === 'hull' ? 'LOST TO THE VOID' : 'THE LIGHT REMEMBERS';
@@ -313,6 +313,22 @@
     return Math.floor(value).toString().padStart(4, '0');
   }
 
+  function readBestScore() {
+    try {
+      return Number(window.localStorage.getItem('starweaver-best') || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  function saveBestScore(value) {
+    try {
+      window.localStorage.setItem('starweaver-best', value);
+    } catch {
+      // The game remains playable when storage is blocked or unavailable.
+    }
+  }
+
   function tone(frequency, duration) {
     if (!state.sound) return;
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
@@ -340,9 +356,10 @@
 
   window.addEventListener('resize', resize);
   window.addEventListener('keydown', (event) => {
+    const isSpace = event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar';
     state.keys[event.key] = true;
-    if (['ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
-    if (event.key === ' ' && !state.running) start();
+    if (['ArrowLeft', 'ArrowRight'].includes(event.key) || isSpace) event.preventDefault();
+    if (isSpace && !state.running) start();
     if (event.key.toLowerCase() === 'p') togglePause();
   });
   window.addEventListener('keyup', (event) => { state.keys[event.key] = false; });
