@@ -31,16 +31,25 @@
       </section>
 
       <section class="game-card" id="gameCard">
-        <div class="hud" aria-live="polite">
-          <div class="stat"><span>Score</span><strong id="score">0000</strong></div>
-          <div class="stat stat-center"><span>Time</span><strong id="time">45</strong></div>
-          <div class="stat stat-center"><span>Hull</span><strong class="lives" id="lives" aria-label="3 hull points">◆ ◆ ◆</strong></div>
-          <div class="stat stat-right"><span>Best</span><strong id="best">0000</strong></div>
-        </div>
-        <div class="time-track" aria-hidden="true"><span id="timeProgress"></span></div>
-
         <div class="canvas-wrap">
           <canvas id="gameCanvas" aria-label="Starweaver game area"></canvas>
+          <div class="game-hud" aria-live="polite">
+            <div class="spark-status">
+              <span class="hud-label">Spark</span>
+              <div class="meter spark-meter" id="sparkMeter" role="meter" aria-label="Spark meter" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0">
+                <i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <strong class="multiplier" id="multiplier">×1</strong>
+            </div>
+            <div class="time-status"><span class="hud-label">Time</span><strong id="time">45</strong></div>
+            <div class="life-status">
+              <span class="hud-label">Void damage</span>
+              <div class="meter life-meter" id="lifeMeter" role="meter" aria-label="Void damage: 0 of 3 hits" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0">
+                <i></i><i></i><i></i>
+              </div>
+            </div>
+            <div class="score-status"><span class="hud-label">Score</span><strong id="score">0000</strong></div>
+          </div>
           <div class="overlay visible" id="startOverlay">
             <div class="sigil">✦</div>
             <p class="overlay-kicker">The constellation is fading</p>

@@ -6,7 +6,7 @@
   const canvas = document.querySelector('#gameCanvas');
   const ctx = canvas.getContext('2d');
   const ids = [
-    'score', 'time', 'lives', 'best', 'timeProgress', 'startOverlay',
+    'score', 'time', 'sparkMeter', 'lifeMeter', 'multiplier', 'startOverlay',
     'endOverlay', 'startButton', 'restartButton', 'pauseButton',
     'pauseBadge', 'combo', 'finalScore', 'finalStreak', 'endTitle',
     'soundButton', 'soundIcon', 'leftButton', 'rightButton'
@@ -32,8 +32,6 @@
   const player = { x: 0, y: 0, width: 26, height: 32, speed: 350, targetX: null };
   let audio;
   let comboTimeout;
-
-  ui.best.textContent = formatScore(state.best);
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -88,7 +86,6 @@
     }
     ui.finalScore.textContent = formatScore(state.score);
     ui.finalStreak.textContent = `×${state.bestMultiplier}`;
-    ui.best.textContent = formatScore(state.best);
     ui.endOverlay.classList.add('visible');
     tone(260, 0.25);
   }
@@ -298,11 +295,18 @@
   }
 
   function updateHud() {
+    const multiplier = Math.min(5, 1 + Math.floor(state.streak / 5));
+    const sparkProgress = multiplier === 5 ? 5 : state.streak % 5;
+    const damage = MAX_LIVES - state.lives;
     ui.score.textContent = formatScore(state.score);
     ui.time.textContent = Math.ceil(state.time).toString().padStart(2, '0');
-    ui.lives.textContent = `${'◆ '.repeat(state.lives)}${'◇ '.repeat(MAX_LIVES - state.lives)}`.trim();
-    ui.lives.setAttribute('aria-label', `${state.lives} hull ${state.lives === 1 ? 'point' : 'points'}`);
-    ui.timeProgress.style.transform = `scaleX(${state.time / ROUND_SECONDS})`;
+    ui.multiplier.textContent = `×${multiplier}`;
+    [...ui.sparkMeter.children].forEach((segment, index) => segment.classList.toggle('filled', index < sparkProgress));
+    [...ui.lifeMeter.children].forEach((segment, index) => segment.classList.toggle('filled', index < damage));
+    ui.sparkMeter.setAttribute('aria-valuenow', sparkProgress);
+    ui.sparkMeter.setAttribute('aria-label', `Spark meter: ${sparkProgress} of 5 toward the next multiplier`);
+    ui.lifeMeter.setAttribute('aria-valuenow', damage);
+    ui.lifeMeter.setAttribute('aria-label', `Void damage: ${damage} of ${MAX_LIVES} hits`);
   }
 
   function formatScore(value) {
