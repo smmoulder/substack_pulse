@@ -58,7 +58,7 @@
             <h1>Welcome, Stuart.</h1>
             <p>Here's what deserves your attention today.</p>
           </div>
-          <div class="date-filter"><span>Last 30 days</span><button aria-label="Change date range">⌄</button></div>
+          <label class="date-filter" for="rangeSelect"><span class="sr-only">Dashboard date range</span><select id="rangeSelect"><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select></label>
         </section>
 
         <section class="attention-card">
@@ -86,7 +86,7 @@
             <strong id="paidTotal">Not available</strong><p id="paidDetail">Import subscribers.csv</p>
           </article>
           <article class="metric-card">
-            <div class="metric-head"><span>30-day revenue</span><span class="trend" id="revenueTrend"></span></div>
+            <div class="metric-head"><span id="revenueLabel">30-day revenue</span><span class="trend" id="revenueTrend"></span></div>
             <strong id="revenueTotal">Not available</strong><p id="revenueDetail">Not included in the imported export</p>
           </article>
         </section>
@@ -107,7 +107,7 @@
 
           <aside class="right-column">
             <article class="panel cadence-panel">
-              <div class="panel-heading"><div><span class="section-label">Publishing cadence</span><h3>Your consistency</h3></div><span class="period">12 weeks</span></div>
+              <div class="panel-heading"><div><span class="section-label">Publishing cadence</span><h3>Your consistency</h3></div><span class="period" id="cadencePeriod">30 days</span></div>
               <div class="cadence-main"><strong id="cadenceValue">Not available</strong><span>posts<br/>per week</span><em id="cadenceTrend"></em></div>
               <div class="cadence-chart" id="cadenceChart" aria-label="Weekly publishing cadence chart"></div>
               <div class="chart-labels" id="chartLabels"><span>—</span><span>—</span></div>
@@ -115,7 +115,7 @@
             </article>
 
             <article class="panel top-content">
-              <div class="panel-heading"><div><span class="section-label">Top content</span><h3>What's resonating</h3></div><button class="text-btn">See all</button></div>
+              <div class="panel-heading"><div><span class="section-label">Top content</span><h3>What's resonating</h3></div><span class="period" id="topMetricLabel">No metric available</span></div>
               <div id="topContentList" class="empty compact"><strong>No post data yet.</strong>Import post statistics to see what resonates.</div>
             </article>
           </aside>
@@ -129,7 +129,7 @@
         <span class="modal-icon">↥</span><span class="section-label">Update your dashboard</span>
         <h2 id="modalTitle">Import Substack data</h2>
         <p>Choose all CSV files from your extracted Substack export. Pulse recognizes subscriber, post, comment, note, and statistics files.</p>
-        <label class="dropzone" id="dropzone" for="fileInput"><span>＋</span><strong>Choose CSV files</strong><small>or drag and drop them here</small></label>
+        <label class="dropzone" id="dropzone" for="fileInput"><span>＋</span><strong>Choose one or more CSV files</strong><small>or drag several files here; new files are combined with earlier imports</small></label>
         <input type="file" id="fileInput" accept=".csv,text/csv" multiple hidden />
         <div class="import-status" id="importStatus" aria-live="polite"></div>
         <div class="privacy-note">♢ Your files are parsed locally and never leave your device.</div>

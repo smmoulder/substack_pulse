@@ -3,7 +3,7 @@
 
   const OWNER_NAME = 'Stuart Moulder';
   const STORAGE_KEY = 'substack-pulse-derived-v1';
-  const state = { files: [], subscribers: [], posts: [], comments: [], replies: [], dismissed: [], activeFilter: 'all', sources: {}, capabilities: {} };
+  const state = { files: [], subscribers: [], posts: [], comments: [], revenues: [], replies: [], dismissed: [], activeFilter: 'all', sources: {}, capabilities: {}, datasets: {}, range: '30' };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -117,7 +117,7 @@
   function mergePosts(rows) {
     rows.map(normalizePost).forEach((post) => {
       const existing = state.posts.find((item) => post.id && item.id === post.id)
-        || state.posts.find((item) => item.title === post.title && item.date === post.date);
+        || state.posts.find((item) => item.title === post.title && (!item.date || !post.date || item.date === post.date));
       if (existing) Object.keys(post).forEach((key) => { if (post[key] !== '' && post[key] !== null) existing[key] = post[key]; });
       else state.posts.push(post);
     });
@@ -170,56 +170,73 @@
   async function importFiles(files) {
     const csvFiles = [...files].filter((file) => file.name.toLowerCase().endsWith('.csv'));
     if (!csvFiles.length) throw new Error('Choose one or more CSV files from your Substack export.');
-    state.files = [];
-    state.subscribers = [];
-    state.posts = [];
-    state.comments = [];
-    state.dismissed = [];
-    state.capabilities = {};
-    const revenues = [];
+    const parsedFiles = [];
     for (const file of csvFiles) {
       const rows = parseCSV(await file.text());
       const type = classifyFile(file.name, rows);
-      state.files.push({ name: file.name, type, rows: rows.length });
-      if (type === 'subscribers') { state.subscribers.push(...rows); state.capabilities.subscribers = true; }
-      else if (type === 'posts') { mergePosts(rows); state.capabilities.posts = true; if (rows.some((row) => get(row, aliases.openRate) || get(row, aliases.views) || get(row, aliases.opens) || get(row, aliases.likes))) state.capabilities.engagement = true; }
-      else if (type === 'comments') { state.comments.push(...rows); state.capabilities.comments = true; }
-      else if (type === 'revenue') { revenues.push(...rows); state.capabilities.revenue = true; }
+      parsedFiles.push({ name: file.name, type, rows });
     }
-    const recognized = state.files.filter((file) => file.type !== 'unknown');
+    const recognized = parsedFiles.filter((file) => file.type !== 'unknown');
     if (!recognized.length) {
-      const headers = Object.keys(parseCSV(await csvFiles[0].text())[0] || {}).slice(0, 8);
-      state.files = [];
+      const headers = Object.keys(parsedFiles[0]?.rows[0] || {}).slice(0, 8);
       const looksLikeMusic = ['artist', 'album', 'genre', 'plays'].filter((header) => headers.includes(header)).length >= 2;
       throw new Error(looksLikeMusic
         ? 'This appears to be a music-library CSV, not a Substack export. In Substack, open Settings → Exports, download the export, extract the ZIP, and select its CSV files.'
         : `No Substack data was recognized. Found columns: ${headers.join(', ') || 'none'}. Select CSV files from an extracted Substack publication export.`);
     }
+    recognized.forEach((file) => { state.datasets[file.name] = { type: file.type, rows: compactRows(file.type, file.rows) }; });
+    rebuildImportedData();
     deriveReplies();
     state.sources.privateAt = new Date().toISOString();
-    const derived = deriveDashboard(revenues);
+    const derived = mergeAvailable(loadSaved(), deriveDashboard());
+    derived.datasets = state.datasets;
     saveDerived(derived);
     render(derived);
-    const skipped = state.files.length - recognized.length;
-    return `${recognized.length} Substack file${recognized.length === 1 ? '' : 's'} imported · ${recognized.reduce((sum, file) => sum + file.rows, 0).toLocaleString()} rows${skipped ? ` · ${skipped} unrelated file${skipped === 1 ? '' : 's'} skipped` : ''}`;
+    const skipped = parsedFiles.length - recognized.length;
+    return `${recognized.length} Substack file${recognized.length === 1 ? '' : 's'} added · ${recognized.reduce((sum, file) => sum + file.rows.length, 0).toLocaleString()} rows · ${Object.keys(state.datasets).length} files combined${skipped ? ` · ${skipped} unrelated file${skipped === 1 ? '' : 's'} skipped` : ''}`;
   }
 
-  function deriveDashboard(revenues = []) {
+  function compactRows(type, rows) {
+    if (type === 'subscribers') return rows.map((row) => ({ email: get(row, aliases.email), name: get(row, aliases.name), status: get(row, aliases.status), plan: get(row, aliases.plan), created_at: get(row, aliases.created) }));
+    if (type === 'posts') return rows.map((row) => ({ post_id: get(row, aliases.postId) || get(row, aliases.id), title: get(row, aliases.title), subtitle: get(row, aliases.subtitle), created_at: get(row, aliases.created), open_rate: get(row, aliases.openRate), views: get(row, aliases.views), opens: get(row, aliases.opens), likes: get(row, aliases.likes), comments: get(row, aliases.commentCount), url: get(row, aliases.url) }));
+    if (type === 'comments') return rows.map((row) => ({ id: get(row, aliases.id), parent_id: get(row, aliases.parent), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), user_email: get(row, aliases.email), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }));
+    if (type === 'revenue') return rows.map((row) => ({ amount: get(row, aliases.revenue), currency: get(row, aliases.currency), created_at: get(row, aliases.created) }));
+    return [];
+  }
+
+  function rebuildImportedData() {
+    state.subscribers = [];
+    state.posts = [];
+    state.comments = [];
+    state.revenues = [];
+    state.capabilities = {};
+    Object.values(state.datasets).forEach(({ type, rows }) => {
+      if (type === 'subscribers') { state.subscribers.push(...rows); state.capabilities.subscribers = true; }
+      else if (type === 'posts') { mergePosts(rows); state.capabilities.posts = true; if (rows.some((row) => get(row, aliases.openRate) || get(row, aliases.views) || get(row, aliases.opens) || get(row, aliases.likes))) state.capabilities.engagement = true; }
+      else if (type === 'comments') { state.comments.push(...rows); state.capabilities.comments = true; }
+      else if (type === 'revenue') { state.revenues.push(...rows); state.capabilities.revenue = true; }
+    });
+    dedupeRows(state.subscribers, aliases.email);
+    dedupeRows(state.comments, aliases.id);
+    state.files = Object.entries(state.datasets).map(([name, dataset]) => ({ name, type: dataset.type, rows: dataset.rows.length }));
+  }
+
+  function deriveDashboard() {
     const activeSubscribers = state.subscribers.filter(subscriberIsActive);
     const paid = activeSubscribers.filter(subscriberIsPaid);
-    const now = new Date();
-    const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate() - 30);
+    const cutoff = rangeCutoff();
     const newSubscribers = activeSubscribers.filter((row) => {
       const date = validDate(get(row, aliases.created));
-      return date && date >= monthAgo;
+      return date && (!cutoff || date >= cutoff);
     }).length;
-    const postRates = state.posts.map((post) => post.openRate).filter((rate) => rate !== null && rate >= 0 && rate <= 1);
-    const revenueRows = revenues.map((row) => ({ amount: numeric(get(row, aliases.revenue)), date: validDate(get(row, aliases.created)), currency: get(row, aliases.currency) })).filter((row) => row.amount !== null);
-    const recentRevenue = revenueRows.filter((row) => !row.date || row.date >= monthAgo);
+    const rangedPosts = postsInRange(state.posts);
+    const postRates = rangedPosts.map((post) => post.openRate).filter((rate) => rate !== null && rate >= 0 && rate <= 1);
+    const revenueRows = state.revenues.map((row) => ({ amount: numeric(get(row, aliases.revenue)), date: validDate(get(row, aliases.created)), currency: get(row, aliases.currency) })).filter((row) => row.amount !== null);
+    const recentRevenue = revenueRows.filter((row) => !cutoff || (row.date && row.date >= cutoff));
     const revenue = recentRevenue.length ? recentRevenue.reduce((sum, row) => sum + row.amount, 0) : null;
     const datedPosts = state.posts.map((post) => ({ ...post, parsedDate: validDate(post.date) })).filter((post) => post.parsedDate);
     return {
-      importedAt: new Date().toISOString(), files: state.files, sources: state.sources, capabilities: state.capabilities,
+      importedAt: new Date().toISOString(), files: state.files, sources: state.sources, capabilities: state.capabilities, datasets: state.datasets, range: state.range,
       subscribers: state.subscribers.length ? activeSubscribers.length : null,
       newSubscribers: state.subscribers.length ? newSubscribers : null,
       paid: state.subscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length : null,
@@ -227,25 +244,46 @@
       openRate: postRates.length ? postRates.reduce((sum, rate) => sum + rate, 0) / postRates.length : null,
       revenue, currency: recentRevenue.find((row) => row.currency)?.currency || 'USD',
       posts: state.posts, datedPosts: datedPosts.map((post) => ({ ...post, parsedDate: post.parsedDate.toISOString() })),
+      raw: { subscribers: state.subscribers, comments: state.comments, revenues: state.revenues },
       replies: state.replies, dismissed: state.dismissed
     };
   }
 
+  function rangeCutoff() {
+    if (state.range === 'all') return null;
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - Number(state.range));
+    return cutoff;
+  }
+
+  function postsInRange(posts) {
+    const cutoff = rangeCutoff();
+    if (!cutoff) return posts;
+    return posts.filter((post) => { const date = validDate(post.date); return date && date >= cutoff; });
+  }
+
   function render(data) {
     state.posts = data.posts || [];
+    state.subscribers = data.raw?.subscribers || state.subscribers;
+    state.comments = data.raw?.comments || state.comments;
+    state.revenues = data.raw?.revenues || state.revenues;
     state.replies = data.replies || [];
     state.dismissed = data.dismissed || [];
     state.sources = data.sources || {};
     state.capabilities = data.capabilities || {};
+    state.datasets = data.datasets || state.datasets || {};
+    state.range = data.range || state.range;
+    $('#rangeSelect').value = state.range;
+    const rangeLabel = state.range === 'all' ? 'all time' : `the last ${state.range} days`;
+    $('#revenueLabel').textContent = state.range === 'all' ? 'All-time revenue' : `${state.range}-day revenue`;
     const available = (value, formatter = String) => value === null || value === undefined ? 'Not available' : formatter(value);
     $('#subscriberTotal').textContent = available(data.subscribers, (value) => value.toLocaleString());
-    $('#subscriberDetail').textContent = data.newSubscribers === null ? 'Import subscribers.csv' : `${data.newSubscribers.toLocaleString()} joined in the last 30 days`;
+    $('#subscriberDetail').textContent = data.newSubscribers === null ? 'Import subscribers.csv' : `${data.newSubscribers.toLocaleString()} joined in ${rangeLabel}`;
     $('#paidTotal').textContent = available(data.paid, (value) => value.toLocaleString());
     $('#paidDetail').textContent = data.conversion === null ? 'Paid status not included in export' : `${formatPercent(data.conversion)} conversion rate`;
     $('#openRate').textContent = available(data.openRate, formatPercent);
-    $('#openRateDetail').textContent = data.openRate === null ? 'Open-rate fields not included in export' : `Average across ${state.posts.filter((post) => post.openRate !== null).length} posts`;
+    $('#openRateDetail').textContent = data.openRate === null ? 'Open-rate fields not included for this range' : `Average across ${postsInRange(state.posts).filter((post) => post.openRate !== null).length} posts in ${rangeLabel}`;
     $('#revenueTotal').textContent = available(data.revenue, (value) => new Intl.NumberFormat('en', { style: 'currency', currency: data.currency || 'USD', maximumFractionDigits: 0 }).format(value));
-    $('#revenueDetail').textContent = data.revenue === null ? 'Revenue not included in export' : 'From imported transactions in the last 30 days';
+    $('#revenueDetail').textContent = data.revenue === null ? 'Revenue not included in export' : `From imported transactions in ${rangeLabel}`;
     if (data.importedAt) $('#syncStatus').innerHTML = `<i></i> Imported ${relativeDate(new Date(data.importedAt)).toLowerCase()}`;
     renderSources();
     renderReplies();
@@ -287,30 +325,40 @@
   function renderCadence(datedPosts) {
     const chart = $('#cadenceChart'); chart.innerHTML = '';
     if (!datedPosts.length) return;
-    const posts = datedPosts.map((post) => ({ ...post, date: new Date(post.parsedDate) }));
+    let posts = datedPosts.map((post) => ({ ...post, date: new Date(post.parsedDate) }));
     const last = new Date(Math.max(...posts.map((post) => post.date)));
-    const start = new Date(last); start.setDate(start.getDate() - 83); start.setHours(0, 0, 0, 0);
-    const weeks = Array(12).fill(0);
-    posts.forEach((post) => { const index = Math.floor((post.date - start) / 604800000); if (index >= 0 && index < 12) weeks[index] += 1; });
-    const average = weeks.reduce((sum, value) => sum + value, 0) / 12;
-    const max = Math.max(...weeks, 1);
-    weeks.forEach((count) => { const bar = document.createElement('i'); bar.style.height = `${Math.max(4, count / max * 100)}%`; bar.title = `${count} post${count === 1 ? '' : 's'}`; chart.appendChild(bar); });
+    const cutoff = rangeCutoff();
+    if (cutoff) posts = posts.filter((post) => post.date >= cutoff);
+    if (!posts.length) { $('#cadenceValue').textContent = '0'; $('#cadencePeriod').textContent = state.range === '30' ? '30 days' : '90 days'; $('#chartLabels').innerHTML = '<span>—</span><span>—</span>'; $('#cadenceInsight').innerHTML = '<span>⌁</span>No posts were found in this date range.'; return; }
+    const start = cutoff || new Date(Math.min(...posts.map((post) => post.date)));
+    const spanWeeks = state.range === 'all' ? Math.max(1, (last - start) / 604800000) : Number(state.range) / 7;
+    const bucketCount = state.range === '30' ? 5 : state.range === '90' ? 13 : 12;
+    const buckets = Array(bucketCount).fill(0);
+    const duration = Math.max(1, last - start);
+    posts.forEach((post) => { const index = Math.min(bucketCount - 1, Math.max(0, Math.floor((post.date - start) / duration * bucketCount))); buckets[index] += 1; });
+    const average = posts.length / spanWeeks;
+    const max = Math.max(...buckets, 1);
+    buckets.forEach((count) => { const bar = document.createElement('i'); bar.style.height = `${Math.max(4, count / max * 100)}%`; bar.title = `${count} post${count === 1 ? '' : 's'}`; chart.appendChild(bar); });
     $('#cadenceValue').textContent = average.toFixed(1);
+    $('#cadencePeriod').textContent = state.range === 'all' ? 'All time' : `${state.range} days`;
     $('#chartLabels').innerHTML = `<span>${formatDate(start)}</span><span>${formatDate(last)}</span>`;
     const provenance = state.sources.publicAt ? 'Public Substack feed' : (state.sources.connectorAt ? 'Imported and locally synchronized post dates' : 'Imported post dates');
-    $('#cadenceInsight').innerHTML = `<span>⌁</span><b>${weeks.filter(Boolean).length} active weeks.</b> ${weeks.reduce((sum, value) => sum + value, 0)} posts in this 12-week window · ${provenance}.`;
-  }
-
-  function engagement(post) {
-    if (post.openRate !== null && post.openRate > 0) return { value: post.openRate, label: 'open rate', display: formatPercent(post.openRate) };
-    if (post.views !== null && post.views > 0) return { value: post.views, label: 'views', display: post.views.toLocaleString() };
-    if (post.opens !== null && post.opens > 0) return { value: post.opens, label: 'opens', display: post.opens.toLocaleString() };
-    if (post.likes !== null || post.comments !== null) { const value = (post.likes || 0) + (post.comments || 0); return value > 0 ? { value, label: 'interactions', display: value.toLocaleString() } : null; }
-    return null;
+    $('#cadenceInsight').innerHTML = `<span>⌁</span><b>${posts.length} posts.</b> ${average.toFixed(1)} posts per week in this range · ${provenance}.`;
   }
 
   function renderTopContent() {
-    const ranked = state.posts.map((post) => ({ post, metric: engagement(post) })).filter((item) => item.metric && item.post.title && item.post.title !== 'Untitled post').sort((a, b) => b.metric.value - a.metric.value).slice(0, 3);
+    const eligible = postsInRange(state.posts).filter((post) => post.title && post.title !== 'Untitled post');
+    const metric = eligible.some((post) => post.views > 0) ? 'views'
+      : eligible.some((post) => post.opens > 0) ? 'opens'
+        : eligible.some((post) => post.openRate > 0) ? 'openRate'
+          : eligible.some((post) => (post.likes || 0) + (post.comments || 0) > 0) ? 'interactions' : null;
+    const ranked = metric ? eligible.map((post) => {
+      const value = metric === 'interactions' ? (post.likes || 0) + (post.comments || 0) : post[metric];
+      const label = metric === 'openRate' ? 'open rate' : metric;
+      const display = metric === 'openRate' ? formatPercent(value) : Number(value || 0).toLocaleString();
+      return { post, metric: { value: value || 0, label, display } };
+    }).filter((item) => item.metric.value > 0).sort((a, b) => b.metric.value - a.metric.value).slice(0, 3) : [];
+    $('#topMetricLabel').textContent = metric ? `Ranked by ${metric === 'openRate' ? 'open rate' : metric}` : 'No metric available';
     $('#topContentList').className = ranked.length ? '' : 'empty compact';
     $('#topContentList').innerHTML = ranked.length ? ranked.map(({ post, metric }, index) => `<div class="content-row"><span class="rank">${String(index + 1).padStart(2, '0')}</span><div><strong>${escapeHTML(post.title)}</strong><p>${post.date ? formatDate(new Date(post.date)) : 'Date not available'}</p></div><b>${metric.display}<small>${metric.label}</small></b></div>`).join('') : '<strong>No engagement data available.</strong>The export does not contain post statistics.';
   }
@@ -459,6 +507,14 @@
   $('#reviewButton').addEventListener('click', () => $('#replyPanel').scrollIntoView({ behavior: 'smooth' }));
   $('#viewAllButton').addEventListener('click', () => $('.tabs button[data-filter="all"]').click());
   $('#menuButton').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+  $('#rangeSelect').addEventListener('change', (event) => {
+    state.range = event.target.value;
+    const saved = loadSaved();
+    const derived = deriveDashboard();
+    derived.importedAt = saved.importedAt || derived.importedAt;
+    saveDerived(derived);
+    render(derived);
+  });
   $('#syncButton').addEventListener('click', syncNow);
   $('#connectorHelp').addEventListener('click', () => { $('#connectorModal').hidden = false; });
   $('#clearDataButton').addEventListener('click', () => {
