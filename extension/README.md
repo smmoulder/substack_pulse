@@ -11,3 +11,5 @@ This Manifest V3 Chrome extension observes JSON responses already loaded by the 
 5. Return to Pulse and choose **Sync now**.
 
 The connector does not read or store passwords, cookies, request headers, or session tokens. It relies on undocumented dashboard response shapes, so Substack changes may require updates to the normalizer.
+
+Use **Export redacted diagnostics** in the extension popup to download the locally stored, already-redacted response shapes when a thread is missing identity, title, history, or link information. Review the JSON before sharing it; although credentials are removed, it can still contain reader and publication content.

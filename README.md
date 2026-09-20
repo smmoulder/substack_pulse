@@ -30,9 +30,9 @@ The source strip explains where displayed values came from. Publishing cadence c
 
 The date-range control supports **Last 30 days**, **Last 90 days**, and **All time**. It recalculates recent subscribers, open rate, revenue, cadence, and top content from records in the selected period. Current total and paid subscriber counts remain current totals. **What's resonating** uses views when any view data is available for the selected period, otherwise opens, then open rate, then combined likes and comments; the metric in use is displayed in the card heading.
 
-Revenue is calculated only when an imported payment, payout, transaction, or revenue file contains an amount field; Pulse never estimates revenue from paid-subscriber counts. The revenue card distinguishes a missing revenue dataset from a valid dataset with no transactions in the selected range.
+Revenue uses two deliberately separate sources. A subscriber export's **Revenue** column is summed across subscribers and labeled **Cumulative revenue from exported subscribers**; it is never filtered by the dashboard date range. Payment, payout, or transaction files are summed separately for the selected date range. Pulse ignores post `estimated_value` and never substitutes it for either revenue measure.
 
-Reply cards retain and display every traceable reader field supplied by the export or connector: name, handle, email, comment ID, and profile/comment/post URL. When a URL is available, **Open in Substack** takes you back to the closest exported location for replying. Exports that omit identity fields still show the comment ID rather than inventing a reader name.
+Reply cards retain and display every traceable reader field supplied by the connector: name, handle, email, stable comment ID, post/thread title, timestamp, and verified profile/comment/post URL. When a URL is available, **Open in Substack** takes you back to the exported conversation location. Pulse labels a conversation **Never replied** or **Follow up** only when the capture supplies a stable ID, identifiable author, timestamp, and complete reply history. Incomplete captures are labeled **Reply status unknown** with the missing evidence shown. Subscriber and post CSVs alone do not establish individual comment threads.
 
 ## Optional local live connector
 

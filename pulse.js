@@ -13,7 +13,9 @@
     handle: ['handle', 'username', 'user_handle', 'author_handle', 'commenter_handle'],
     userId: ['user_id', 'author_id', 'commenter_id', 'subscriber_id'],
     profileUrl: ['profile_url', 'author_url', 'user_url'],
-    commentUrl: ['comment_url', 'thread_url', 'reply_url', 'note_url'],
+    commentUrl: ['comment_url', 'thread_url', 'reply_url', 'note_url', 'permalink'],
+    replyCount: ['reply_count', 'replies_count', 'num_replies', 'child_count'],
+    historyComplete: ['history_complete', 'replies_complete', 'thread_complete'],
     status: ['status', 'subscription_status', 'subscriber_status'],
     plan: ['plan', 'type', 'subscription_type', 'subscription_tier', 'plan_name', 'is_paid', 'stripe_subscription_status'],
     created: ['created_at', 'created', 'date', 'post_date', 'published_at', 'publication_date', 'email_sent_at', 'paid_at', 'transaction_date', 'timestamp'],
@@ -29,6 +31,7 @@
     likes: ['likes', 'reactions', 'like_count'],
     commentCount: ['comments', 'comment_count', 'comments_count'],
     revenue: ['revenue', 'amount', 'amount_paid', 'payment_amount', 'net_amount', 'gross_amount', 'net_revenue', 'gross_revenue', 'earnings', 'payout_amount', 'revenue_usd'],
+    subscriberRevenue: ['revenue', 'subscriber_revenue', 'lifetime_revenue', 'total_revenue', 'revenue_usd'],
     currency: ['currency', 'currency_code'],
     url: ['url', 'canonical_url', 'post_url']
   };
@@ -146,36 +149,54 @@
   }
 
   function deriveReplies() {
-    const byId = new Map(state.comments.map((row, index) => [get(row, aliases.id) || `row-${index}`, row]));
+    const byId = new Map(state.comments.map((row, index) => [get(row, aliases.id) || `unstable-row-${index}`, row]));
     const children = new Map();
     state.comments.forEach((row) => {
       const parent = get(row, aliases.parent);
       if (parent) children.set(parent, [...(children.get(parent) || []), row]);
     });
     const owner = OWNER_NAME.toLowerCase();
-    const waiting = [];
+    const conversations = [];
     byId.forEach((row, id) => {
       const reader = readerInfo(row);
       const author = reader.name;
       if (author.toLowerCase().includes(owner) || get(row, aliases.parent)) return;
-      const descendants = children.get(id) || [];
+      const descendants = collectDescendants(id, children);
       const ownerReplied = descendants.some((reply) => commentIdentity(reply).toLowerCase().includes(owner));
-      if (ownerReplied) return;
       const date = validDate(get(row, aliases.created));
       const postId = get(row, aliases.postId);
       const post = state.posts.find((item) => item.id && item.id === postId);
       const directUrl = get(row, aliases.commentUrl);
-      waiting.push({
-        id, name: author, initials: initials(author), type: descendants.length ? 'follow' : 'never',
-        tag: descendants.length ? 'Follow up' : 'Never replied',
+      const replyCount = numeric(get(row, aliases.replyCount));
+      const explicitComplete = /^(true|1|yes)$/i.test(get(row, aliases.historyComplete));
+      const historyComplete = explicitComplete || (replyCount !== null && descendants.length >= replyCount);
+      const stableId = !id.startsWith('unstable-row-');
+      const knownAuthor = author !== 'Reader' && author !== 'Identity unavailable';
+      const supported = historyComplete && stableId && knownAuthor && Boolean(date);
+      if (supported && ownerReplied) return;
+      const type = supported ? (descendants.length ? 'follow' : 'never') : 'unknown';
+      const missing = [!knownAuthor && 'author identity', !stableId && 'stable comment ID', !date && 'timestamp', !historyComplete && 'complete reply history'].filter(Boolean);
+      conversations.push({
+        id, name: knownAuthor ? author : 'Identity unavailable', initials: knownAuthor ? initials(author) : '?', type,
+        tag: type === 'follow' ? 'Follow up' : type === 'never' ? 'Never replied' : 'Reply status unknown',
         message: get(row, aliases.body) || 'Message text not included in this export.',
-        source: post?.title || get(row, aliases.title) || 'Substack conversation',
+        source: post?.title || get(row, aliases.title) || 'Thread title unavailable',
         email: reader.email, handle: reader.handle, readerId: reader.userId,
         url: directUrl || post?.url || reader.profileUrl || '',
+        statusReason: missing.length ? `Missing ${missing.join(', ')}` : '',
         date: date ? date.toISOString() : '', age: date ? relativeDate(date) : 'Date not available'
       });
     });
-    state.replies = waiting.filter((reply) => !state.dismissed.includes(reply.id)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    state.replies = conversations.filter((reply) => !state.dismissed.includes(reply.id)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }
+
+  function collectDescendants(id, children, seen = new Set()) {
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return (children.get(id) || []).flatMap((row) => {
+      const childId = get(row, aliases.id);
+      return [row, ...(childId ? collectDescendants(childId, children, seen) : [])];
+    });
   }
 
   function initials(name) {
@@ -219,9 +240,9 @@
   }
 
   function compactRows(type, rows) {
-    if (type === 'subscribers') return rows.map((row) => ({ email: get(row, aliases.email), name: get(row, aliases.name), handle: get(row, aliases.handle), user_id: get(row, aliases.userId), profile_url: get(row, aliases.profileUrl), status: get(row, aliases.status), plan: get(row, aliases.plan), created_at: get(row, aliases.created) }));
+    if (type === 'subscribers') return rows.map((row) => ({ email: get(row, aliases.email), name: get(row, aliases.name), handle: get(row, aliases.handle), user_id: get(row, aliases.userId), profile_url: get(row, aliases.profileUrl), status: get(row, aliases.status), plan: get(row, aliases.plan), subscriber_revenue: get(row, aliases.subscriberRevenue), currency: get(row, aliases.currency), created_at: get(row, aliases.created) }));
     if (type === 'posts') return rows.map((row) => ({ post_id: get(row, aliases.postId) || get(row, aliases.id), title: get(row, aliases.title), subtitle: get(row, aliases.subtitle), created_at: get(row, aliases.created), open_rate: get(row, aliases.openRate), views: get(row, aliases.views), opens: get(row, aliases.opens), likes: get(row, aliases.likes), comments: get(row, aliases.commentCount), url: get(row, aliases.url) }));
-    if (type === 'comments') return rows.map((row) => ({ id: get(row, aliases.id), parent_id: get(row, aliases.parent), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), author_handle: get(row, aliases.handle), author_id: get(row, aliases.userId), user_email: get(row, aliases.email), profile_url: get(row, aliases.profileUrl), comment_url: get(row, aliases.commentUrl), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }));
+    if (type === 'comments') return rows.map((row) => ({ id: get(row, aliases.id), parent_id: get(row, aliases.parent), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), author_handle: get(row, aliases.handle), author_id: get(row, aliases.userId), user_email: get(row, aliases.email), profile_url: get(row, aliases.profileUrl), comment_url: get(row, aliases.commentUrl), reply_count: get(row, aliases.replyCount), history_complete: get(row, aliases.historyComplete), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }));
     if (type === 'revenue') return rows.map((row) => ({ amount: get(row, aliases.revenue), currency: get(row, aliases.currency), created_at: get(row, aliases.created) }));
     return [];
   }
@@ -256,6 +277,8 @@
     const revenueRows = state.revenues.map((row) => ({ amount: numeric(get(row, aliases.revenue)), date: validDate(get(row, aliases.created)), currency: get(row, aliases.currency) })).filter((row) => row.amount !== null);
     const recentRevenue = revenueRows.filter((row) => !cutoff || (row.date && row.date >= cutoff));
     const revenue = recentRevenue.length ? recentRevenue.reduce((sum, row) => sum + row.amount, 0) : null;
+    const subscriberRevenueRows = state.subscribers.map((row) => numeric(row.subscriber_revenue)).filter((value) => value !== null);
+    const subscriberRevenue = subscriberRevenueRows.length ? subscriberRevenueRows.reduce((sum, value) => sum + value, 0) : null;
     const datedPosts = state.posts.map((post) => ({ ...post, parsedDate: validDate(post.date) })).filter((post) => post.parsedDate);
     return {
       importedAt: new Date().toISOString(), files: state.files, sources: state.sources, capabilities: state.capabilities, datasets: state.datasets, range: state.range,
@@ -264,7 +287,8 @@
       paid: state.subscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length : null,
       conversion: activeSubscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length / activeSubscribers.length : null,
       openRate: postRates.length ? postRates.reduce((sum, rate) => sum + rate, 0) / postRates.length : null,
-      revenue, currency: recentRevenue.find((row) => row.currency)?.currency || 'USD',
+      revenue, subscriberRevenue, revenueKind: revenue !== null ? 'transactions' : (subscriberRevenue !== null ? 'subscriber-cumulative' : null),
+      currency: recentRevenue.find((row) => row.currency)?.currency || state.subscribers.find((row) => row.currency)?.currency || 'USD',
       posts: state.posts, datedPosts: datedPosts.map((post) => ({ ...post, parsedDate: post.parsedDate.toISOString() })),
       raw: { subscribers: state.subscribers, comments: state.comments, revenues: state.revenues },
       replies: state.replies, dismissed: state.dismissed
@@ -304,8 +328,12 @@
     $('#paidDetail').textContent = data.conversion === null ? 'Paid status not included in export' : `${formatPercent(data.conversion)} conversion rate`;
     $('#openRate').textContent = available(data.openRate, formatPercent);
     $('#openRateDetail').textContent = data.openRate === null ? 'Open-rate fields not included for this range' : `Average across ${postsInRange(state.posts).filter((post) => post.openRate !== null).length} posts in ${rangeLabel}`;
-    $('#revenueTotal').textContent = available(data.revenue, (value) => new Intl.NumberFormat('en', { style: 'currency', currency: data.currency || 'USD', maximumFractionDigits: 0 }).format(value));
-    $('#revenueDetail').textContent = data.revenue === null
+    const displayedRevenue = data.revenueKind === 'subscriber-cumulative' ? data.subscriberRevenue : data.revenue;
+    $('#revenueLabel').textContent = data.revenueKind === 'subscriber-cumulative' ? 'Cumulative revenue' : (state.range === 'all' ? 'All-time revenue' : `${state.range}-day revenue`);
+    $('#revenueTotal').textContent = available(displayedRevenue, (value) => new Intl.NumberFormat('en', { style: 'currency', currency: data.currency || 'USD' }).format(value));
+    $('#revenueDetail').textContent = data.revenueKind === 'subscriber-cumulative'
+      ? 'Cumulative revenue from exported subscribers.'
+      : data.revenue === null
       ? (state.capabilities.revenue ? `No revenue transactions found in ${rangeLabel}` : 'No revenue or payout fields found in imported files')
       : `From imported transactions in ${rangeLabel}`;
     if (data.importedAt) $('#syncStatus').innerHTML = `<i></i> Imported ${relativeDate(new Date(data.importedAt)).toLowerCase()}`;
@@ -328,21 +356,24 @@
     const visible = state.replies.filter((reply) => state.activeFilter === 'all' || reply.type === state.activeFilter);
     const never = state.replies.filter((reply) => reply.type === 'never').length;
     const follow = state.replies.filter((reply) => reply.type === 'follow').length;
+    const unknown = state.replies.filter((reply) => reply.type === 'unknown').length;
+    const confirmed = never + follow;
     $('#navCount').textContent = state.replies.length;
     $('#allCount').textContent = state.replies.length;
     $('#neverCount').textContent = never;
     $('#followCount').textContent = follow;
+    $('#unknownCount').textContent = unknown;
     if (state.capabilities.comments) {
-      $('#attentionTitle').innerHTML = `<strong id="waitingTotal">${state.replies.length} reader${state.replies.length === 1 ? '' : 's'} waiting</strong> to hear from you`;
-      const dated = state.replies.map((reply) => validDate(reply.date)).filter(Boolean).sort((a, b) => a - b);
-      $('#attentionDetail').textContent = dated.length ? `Your oldest unanswered message is ${relativeDate(dated[0]).toLowerCase()}.` : 'No dated unanswered messages were found.';
+      $('#attentionTitle').innerHTML = `<strong id="waitingTotal">${confirmed} confirmed conversation${confirmed === 1 ? '' : 's'}</strong> waiting on you`;
+      const dated = state.replies.filter((reply) => reply.type !== 'unknown').map((reply) => validDate(reply.date)).filter(Boolean).sort((a, b) => a - b);
+      $('#attentionDetail').textContent = `${dated.length ? `Oldest confirmed unanswered message: ${relativeDate(dated[0]).toLowerCase()}.` : 'No confirmed unanswered messages.'}${unknown ? ` ${unknown} conversation${unknown === 1 ? ' has' : 's have'} unknown reply status.` : ''}`;
     }
     $('#waitingAvatars').innerHTML = state.replies.slice(0, 3).map((reply) => `<span>${escapeHTML(reply.initials)}</span>`).join('') + (state.replies.length > 3 ? `<span>+${state.replies.length - 3}</span>` : '');
     $('#replyList').innerHTML = visible.length ? visible.map((reply) => `
       <article class="reply-item"><div class="reply-avatar">${escapeHTML(reply.initials)}</div><div class="reply-body">
       <div class="reply-meta"><strong>${escapeHTML(reply.name)}</strong><span class="badge ${reply.type}">${reply.tag}</span></div>
       <div class="reader-details">${reply.handle ? `@${escapeHTML(reply.handle.replace(/^@/, ''))}` : ''}${reply.email ? `<span>${escapeHTML(reply.email)}</span>` : ''}${!reply.handle && !reply.email ? `<span>Comment ID ${escapeHTML(reply.id)}</span>` : ''}</div>
-      <p>${escapeHTML(reply.message)}</p><small>On “${escapeHTML(reply.source)}” · ${escapeHTML(reply.age)}</small></div>
+      <p>${escapeHTML(reply.message)}</p><small>On “${escapeHTML(reply.source)}” · ${escapeHTML(reply.age)}</small>${reply.statusReason ? `<small class="status-reason">${escapeHTML(reply.statusReason)}</small>` : ''}</div>
       <div class="reply-actions">${safeUrl(reply.url) ? `<a class="reply-action" href="${escapeHTML(safeUrl(reply.url))}" target="_blank" rel="noopener">Open in Substack ↗</a>` : ''}<button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></div></article>`).join('')
       : `<div class="empty"><strong>${state.capabilities.comments ? 'You’re all caught up.' : 'Reply data is not available yet.'}</strong>${state.capabilities.comments ? 'No replies in this view need your attention.' : 'Open the comments and Notes pages in Substack with the connector installed, then sync again.'}</div>`;
   }
@@ -436,8 +467,19 @@
         if (value.id) normalized.author_id = String(value.id);
         if (value.handle || value.username) normalized.author_handle = String(value.handle || value.username);
         if (value.profile_url || value.url) normalized.profile_url = String(value.profile_url || value.url);
+      } else if (/^(post|publication|thread)$/.test(cleanKey)) {
+        if (value.id) normalized.post_id = String(value.id);
+        if (value.title || value.name) normalized.title = String(value.title || value.name);
+        if (value.canonical_url || value.url) normalized.post_url = String(value.canonical_url || value.url);
+      } else if (/^(replies|children)$/.test(cleanKey) && Array.isArray(value)) {
+        normalized.captured_reply_count = String(value.length);
       }
     });
+    const declaredReplies = numeric(get(normalized, aliases.replyCount));
+    const capturedReplies = numeric(normalized.captured_reply_count);
+    const hasMore = record.has_more_replies ?? record.has_more_children ?? record.has_more;
+    if (capturedReplies !== null && hasMore === false && (declaredReplies === null || capturedReplies >= declaredReplies)) normalized.history_complete = 'true';
+    if (!normalized.comment_url && typeof record.url === 'string' && /comment|note|reply/i.test(record.url)) normalized.comment_url = record.url;
     return normalized;
   }
 
@@ -491,7 +533,8 @@
   function loadSaved() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } }
   function mergeAvailable(previous, fresh) {
     const result = { ...previous, ...fresh, sources: { ...(previous.sources || {}), ...(fresh.sources || {}) } };
-    ['subscribers', 'newSubscribers', 'paid', 'conversion', 'openRate', 'revenue'].forEach((key) => { if (fresh[key] === null && previous[key] !== undefined) result[key] = previous[key]; });
+    ['subscribers', 'newSubscribers', 'paid', 'conversion', 'openRate', 'revenue', 'subscriberRevenue'].forEach((key) => { if (fresh[key] === null && previous[key] !== undefined) result[key] = previous[key]; });
+    if (!fresh.revenueKind && previous.revenueKind) result.revenueKind = previous.revenueKind;
     if (!fresh.posts?.length && previous.posts) result.posts = previous.posts;
     if (!fresh.datedPosts?.length && previous.datedPosts) result.datedPosts = previous.datedPosts;
     if (!fresh.replies?.length && !state.comments.length && previous.replies) result.replies = previous.replies;
