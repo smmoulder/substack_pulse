@@ -181,8 +181,8 @@
         tag: type === 'follow' ? 'Follow up' : type === 'never' ? 'Never replied' : 'Reply status unknown',
         message: get(row, aliases.body) || 'Message text not included in this export.',
         source: post?.title || get(row, aliases.title) || 'Thread title unavailable',
-        email: reader.email, handle: reader.handle, readerId: reader.userId,
-        url: directUrl || post?.url || reader.profileUrl || '',
+        email: reader.email, handle: reader.handle, readerId: reader.userId, profileUrl: reader.profileUrl,
+        url: directUrl || post?.url || '',
         statusReason: missing.length ? `Missing ${missing.join(', ')}` : '',
         date: date ? date.toISOString() : '', age: date ? relativeDate(date) : 'Date not available'
       });
@@ -372,7 +372,7 @@
     $('#replyList').innerHTML = visible.length ? visible.map((reply) => `
       <article class="reply-item"><div class="reply-avatar">${escapeHTML(reply.initials)}</div><div class="reply-body">
       <div class="reply-meta"><strong>${escapeHTML(reply.name)}</strong><span class="badge ${reply.type}">${reply.tag}</span></div>
-      <div class="reader-details">${reply.handle ? `@${escapeHTML(reply.handle.replace(/^@/, ''))}` : ''}${reply.email ? `<span>${escapeHTML(reply.email)}</span>` : ''}${!reply.handle && !reply.email ? `<span>Comment ID ${escapeHTML(reply.id)}</span>` : ''}</div>
+      <div class="reader-details">${reply.handle ? `@${escapeHTML(reply.handle.replace(/^@/, ''))}` : ''}${reply.email ? `<span>${escapeHTML(reply.email)}</span>` : ''}${safeUrl(reply.profileUrl) ? `<a href="${escapeHTML(safeUrl(reply.profileUrl))}" target="_blank" rel="noopener">Reader profile ↗</a>` : ''}${!reply.handle && !reply.email ? `<span>Comment ID ${escapeHTML(reply.id)}</span>` : ''}</div>
       <p>${escapeHTML(reply.message)}</p><small>On “${escapeHTML(reply.source)}” · ${escapeHTML(reply.age)}</small>${reply.statusReason ? `<small class="status-reason">${escapeHTML(reply.statusReason)}</small>` : ''}</div>
       <div class="reply-actions">${safeUrl(reply.url) ? `<a class="reply-action" href="${escapeHTML(safeUrl(reply.url))}" target="_blank" rel="noopener">Open in Substack ↗</a>` : ''}<button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></div></article>`).join('')
       : `<div class="empty"><strong>${state.capabilities.comments ? 'You’re all caught up.' : 'Reply data is not available yet.'}</strong>${state.capabilities.comments ? 'No replies in this view need your attention.' : 'Open the comments and Notes pages in Substack with the connector installed, then sync again.'}</div>`;
