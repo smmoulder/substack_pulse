@@ -12,6 +12,7 @@ A calm, human-first analytics dashboard for Stuart Moulder's Substack publicatio
 - Clear **Not available** states instead of fabricated data
 - Responsive desktop and mobile layout
 - Derived dashboard data saved only in the browser's local storage
+- Public post-feed and private dashboard synchronization through the optional local Chrome extension
 
 ## Importing a Substack export
 
@@ -20,6 +21,19 @@ A calm, human-first analytics dashboard for Stuart Moulder's Substack publicatio
 3. Open **Import data** in Pulse and select all of the extracted CSV files together, or drag them onto the import area.
 
 Pulse recognizes subscriber, post/statistics, comment/reply, note, and payment/revenue CSV files by filename and column headers. Export formats can vary; metrics whose supporting columns are absent remain marked **Not available**. For reply detection, a thread is considered waiting when a reader's root comment has no reply authored by **Stuart Moulder**. No selected file is uploaded or sent over the network.
+
+If the file picker appears to do nothing, confirm that the downloaded Substack archive has been extracted first. Select the `.csv` files inside the extracted folder rather than the `.zip` file. The import dialog reports the number of files and rows parsed, and it can import the same filenames again after a newer export is downloaded.
+
+## Optional local live connector
+
+The [`extension`](extension/) directory contains an unpacked Manifest V3 browser extension. It observes JSON responses that the signed-in Substack publisher dashboard already loads, removes credential-like fields, stores a limited local snapshot, and retrieves the public feed for `smmoulder.substack.com`. Pulse's **Sync now** button reads that snapshot without uploading it to an application server.
+
+1. Open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**.
+2. Select the project's `extension` folder.
+3. Sign in to Substack and visit the publisher dashboard pages containing the desired analytics, subscriber, post, and comment data.
+4. Return to Pulse and select **Sync now**.
+
+This connector intentionally does not handle passwords, cookies, authorization headers, or session tokens. It depends on the response formats used by Substack's publisher dashboard, which are not a stable public API and may change. The CSV snapshot remains the reliable fallback.
 
 ## Run locally
 

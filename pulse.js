@@ -3,7 +3,7 @@
 
   const OWNER_NAME = 'Stuart Moulder';
   const STORAGE_KEY = 'substack-pulse-derived-v1';
-  const state = { files: [], subscribers: [], posts: [], comments: [], replies: [], dismissed: [], activeFilter: 'all' };
+  const state = { files: [], subscribers: [], posts: [], comments: [], replies: [], dismissed: [], activeFilter: 'all', sources: {} };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -185,6 +185,7 @@
       else if (type === 'revenue') revenues.push(...rows);
     }
     deriveReplies();
+    state.sources.privateAt = new Date().toISOString();
     const derived = deriveDashboard(revenues);
     saveDerived(derived);
     render(derived);
@@ -206,7 +207,7 @@
     const revenue = recentRevenue.length ? recentRevenue.reduce((sum, row) => sum + row.amount, 0) : null;
     const datedPosts = state.posts.map((post) => ({ ...post, parsedDate: validDate(post.date) })).filter((post) => post.parsedDate);
     return {
-      importedAt: new Date().toISOString(), files: state.files,
+      importedAt: new Date().toISOString(), files: state.files, sources: state.sources,
       subscribers: state.subscribers.length ? activeSubscribers.length : null,
       newSubscribers: state.subscribers.length ? newSubscribers : null,
       paid: state.subscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length : null,
@@ -222,6 +223,7 @@
     state.posts = data.posts || [];
     state.replies = data.replies || [];
     state.dismissed = data.dismissed || [];
+    state.sources = data.sources || {};
     const available = (value, formatter = String) => value === null || value === undefined ? 'Not available' : formatter(value);
     $('#subscriberTotal').textContent = available(data.subscribers, (value) => value.toLocaleString());
     $('#subscriberDetail').textContent = data.newSubscribers === null ? 'Import subscribers.csv' : `${data.newSubscribers.toLocaleString()} joined in the last 30 days`;
@@ -232,12 +234,20 @@
     $('#revenueTotal').textContent = available(data.revenue, (value) => new Intl.NumberFormat('en', { style: 'currency', currency: data.currency || 'USD', maximumFractionDigits: 0 }).format(value));
     $('#revenueDetail').textContent = data.revenue === null ? 'Revenue not included in export' : 'From imported transactions in the last 30 days';
     if (data.importedAt) $('#syncStatus').innerHTML = `<i></i> Imported ${relativeDate(new Date(data.importedAt)).toLowerCase()}`;
+    renderSources();
     renderReplies();
     renderCadence(data.datedPosts || []);
     renderTopContent();
   }
 
   function formatPercent(value) { return `${(value * 100).toFixed(1)}%`; }
+
+  function renderSources() {
+    $('#privateSource').textContent = state.sources.privateAt ? `CSV · ${relativeDate(new Date(state.sources.privateAt))}` : 'No CSV snapshot';
+    $('#publicSource').textContent = state.sources.publicAt ? `Feed · ${relativeDate(new Date(state.sources.publicAt))}` : 'Not connected';
+    $('#connectorSource').textContent = state.sources.connectorAt ? `Captured · ${relativeDate(new Date(state.sources.connectorAt))}` : 'Extension not detected';
+    $$('#sourceStrip .source-dot').forEach((dot, index) => dot.classList.toggle('muted', ![state.sources.privateAt, state.sources.publicAt, state.sources.connectorAt][index]));
+  }
 
   function renderReplies() {
     const visible = state.replies.filter((reply) => state.activeFilter === 'all' || reply.type === state.activeFilter);
@@ -297,6 +307,100 @@
   function restoreDerived() { try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (saved) { state.files = saved.files || []; render(saved); } } catch { localStorage.removeItem(STORAGE_KEY); } }
   function showToast(message) { $('#toast').textContent = message; $('#toast').classList.add('show'); window.setTimeout(() => $('#toast').classList.remove('show'), 2600); }
 
+  function requestConnector() {
+    return new Promise((resolve, reject) => {
+      const requestId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      const timeout = window.setTimeout(() => { window.removeEventListener('message', receive); reject(new Error('Local connector not detected')); }, 2500);
+      function receive(event) {
+        if (event.source !== window || event.data?.type !== 'SUBSTACK_PULSE_SYNC_RESULT' || event.data.requestId !== requestId) return;
+        window.clearTimeout(timeout); window.removeEventListener('message', receive);
+        if (event.data.error) reject(new Error(event.data.error)); else resolve(event.data.payload || {});
+      }
+      window.addEventListener('message', receive);
+      window.postMessage({ type: 'SUBSTACK_PULSE_REQUEST_SYNC', requestId }, window.location.origin);
+    });
+  }
+
+  function walkRecords(value, visit, seen = new WeakSet()) {
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (!Array.isArray(value)) visit(value);
+    Object.values(value).forEach((child) => walkRecords(child, visit, seen));
+  }
+
+  function recordKind(row) {
+    const keys = Object.keys(row).map(normalizeHeader);
+    const has = (...names) => names.some((name) => keys.includes(name));
+    if (has('subscription_status', 'subscriber_status', 'is_paid') && has('email', 'email_address')) return 'subscriber';
+    if (has('comment_id', 'parent_comment_id', 'reply_to_id') || (has('body', 'comment') && has('post_id'))) return 'comment';
+    if (has('post_id', 'published_at', 'post_date', 'email_open_rate', 'open_rate') && has('title', 'post_title', 'subject')) return 'post';
+    return '';
+  }
+
+  function ingestConnectorPayload(payload) {
+    const before = { subscribers: state.subscribers.length, posts: state.posts.length, comments: state.comments.length };
+    (payload.captures || []).forEach((capture) => walkRecords(capture.data, (record) => {
+      const normalized = Object.fromEntries(Object.entries(record).map(([key, value]) => [normalizeHeader(key), typeof value === 'object' ? '' : String(value ?? '')]));
+      const kind = recordKind(normalized);
+      if (kind === 'subscriber') state.subscribers.push(normalized);
+      else if (kind === 'comment') state.comments.push(normalized);
+      else if (kind === 'post') mergePosts([normalized]);
+    }));
+    dedupeRows(state.subscribers, aliases.email);
+    dedupeRows(state.comments, aliases.id);
+    deriveReplies();
+    if (payload.feedXml) ingestFeed(payload.feedXml);
+    state.sources.connectorAt = payload.capturedAt || new Date().toISOString();
+    const fresh = deriveDashboard();
+    const previous = loadSaved();
+    const merged = mergeAvailable(previous, fresh);
+    saveDerived(merged); render(merged);
+    const added = (state.subscribers.length - before.subscribers) + (state.posts.length - before.posts) + (state.comments.length - before.comments);
+    return added;
+  }
+
+  function dedupeRows(rows, keys) {
+    const seen = new Set();
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const id = get(rows[index], keys);
+      if (id && seen.has(id)) rows.splice(index, 1); else if (id) seen.add(id);
+    }
+  }
+
+  function ingestFeed(xml) {
+    const documentNode = new DOMParser().parseFromString(xml, 'application/xml');
+    const items = [...documentNode.querySelectorAll('item, entry')];
+    mergePosts(items.map((item) => ({
+      post_id: item.querySelector('guid, id')?.textContent || item.querySelector('link')?.getAttribute('href') || item.querySelector('link')?.textContent || '',
+      title: item.querySelector('title')?.textContent || 'Untitled post',
+      published_at: item.querySelector('pubDate, published, updated')?.textContent || '',
+      url: item.querySelector('link')?.getAttribute('href') || item.querySelector('link')?.textContent || ''
+    })));
+    if (items.length) state.sources.publicAt = new Date().toISOString();
+  }
+
+  function loadSaved() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } }
+  function mergeAvailable(previous, fresh) {
+    const result = { ...previous, ...fresh, sources: { ...(previous.sources || {}), ...(fresh.sources || {}) } };
+    ['subscribers', 'newSubscribers', 'paid', 'conversion', 'openRate', 'revenue'].forEach((key) => { if (fresh[key] === null && previous[key] !== undefined) result[key] = previous[key]; });
+    if (!fresh.posts?.length && previous.posts) result.posts = previous.posts;
+    if (!fresh.datedPosts?.length && previous.datedPosts) result.datedPosts = previous.datedPosts;
+    if (!fresh.replies?.length && !state.comments.length && previous.replies) result.replies = previous.replies;
+    return result;
+  }
+
+  async function syncNow() {
+    const button = $('#syncButton'); button.disabled = true; button.innerHTML = '<span>↻</span> Syncing…';
+    try {
+      const payload = await requestConnector();
+      const added = ingestConnectorPayload(payload);
+      showToast(`Local sync complete · ${added} records refreshed`);
+    } catch (error) {
+      showToast('Connector not detected — opening setup help');
+      $('#connectorModal').hidden = false;
+    } finally { button.disabled = false; button.innerHTML = '<span>↻</span> Sync now'; }
+  }
+
   const modal = $('#importModal');
   const openModal = () => { modal.hidden = false; $('#modalClose').focus(); };
   const closeModal = () => { modal.hidden = true; $('#importStatus').textContent = ''; };
@@ -309,8 +413,8 @@
   $('#importButton').addEventListener('click', openModal);
   $('#modalClose').addEventListener('click', closeModal);
   modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) closeModal(); });
-  $('#fileInput').addEventListener('change', (event) => handleFiles(event.target.files));
+  document.addEventListener('keydown', (event) => { if (event.key !== 'Escape') return; if (!modal.hidden) closeModal(); $('#connectorModal').hidden = true; });
+  $('#fileInput').addEventListener('change', async (event) => { await handleFiles(event.target.files); event.target.value = ''; });
   ['dragenter', 'dragover'].forEach((type) => $('#dropzone').addEventListener(type, (event) => { event.preventDefault(); $('#dropzone').classList.add('dragging'); }));
   ['dragleave', 'drop'].forEach((type) => $('#dropzone').addEventListener(type, (event) => { event.preventDefault(); $('#dropzone').classList.remove('dragging'); }));
   $('#dropzone').addEventListener('drop', (event) => handleFiles(event.dataTransfer.files));
@@ -319,6 +423,10 @@
   $('#reviewButton').addEventListener('click', () => $('#replyPanel').scrollIntoView({ behavior: 'smooth' }));
   $('#viewAllButton').addEventListener('click', () => $('.tabs button[data-filter="all"]').click());
   $('#menuButton').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+  $('#syncButton').addEventListener('click', syncNow);
+  $('#connectorHelp').addEventListener('click', () => { $('#connectorModal').hidden = false; });
+  $('#connectorClose').addEventListener('click', () => { $('#connectorModal').hidden = true; });
+  $('#connectorModal').addEventListener('click', (event) => { if (event.target === $('#connectorModal')) $('#connectorModal').hidden = true; });
   $$('.nav-item[data-section]').forEach((button) => button.addEventListener('click', () => { $$('.nav-item[data-section]').forEach((item) => item.classList.remove('active')); button.classList.add('active'); $('#sidebar').classList.remove('open'); if (button.dataset.section === 'inbox') $('#replyPanel').scrollIntoView({ behavior: 'smooth' }); }));
 
   $('#todayLabel').textContent = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());

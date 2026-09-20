@@ -40,11 +40,18 @@
         <div class="top-actions">
           <span class="sync-status" id="syncStatus"><i></i> No data imported</span>
           <button class="icon-btn" aria-label="Notifications">♢<span></span></button>
+          <button class="sync-btn" id="syncButton" type="button"><span>↻</span> Sync now</button>
           <button class="import-btn" id="importButton"><span>↥</span> Import data</button>
         </div>
       </header>
 
       <div class="page">
+        <section class="source-strip" id="sourceStrip" aria-label="Data sources">
+          <span><i class="source-dot muted"></i><b>Private analytics</b><em id="privateSource">No CSV snapshot</em></span>
+          <span><i class="source-dot muted"></i><b>Public posts</b><em id="publicSource">Not connected</em></span>
+          <span><i class="source-dot muted"></i><b>Local connector</b><em id="connectorSource">Extension not detected</em></span>
+          <button id="connectorHelp" type="button">Setup help</button>
+        </section>
         <section class="welcome">
           <div>
             <p class="eyebrow" id="todayLabel"></p>
@@ -121,11 +128,22 @@
         <button class="modal-close" id="modalClose" aria-label="Close">×</button>
         <span class="modal-icon">↥</span><span class="section-label">Update your dashboard</span>
         <h2 id="modalTitle">Import Substack data</h2>
-        <p>Choose all CSV files from your Substack export. Pulse recognizes subscriber, post, comment, note, and statistics files.</p>
+        <p>Choose all CSV files from your extracted Substack export. Pulse recognizes subscriber, post, comment, note, and statistics files.</p>
         <label class="dropzone" id="dropzone" for="fileInput"><span>＋</span><strong>Choose CSV files</strong><small>or drag and drop them here</small></label>
-        <input type="file" id="fileInput" accept=".csv" multiple hidden />
+        <input type="file" id="fileInput" accept=".csv,text/csv" multiple hidden />
         <div class="import-status" id="importStatus" aria-live="polite"></div>
         <div class="privacy-note">♢ Your files are parsed locally and never leave your device.</div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="connectorModal" hidden>
+      <section class="modal connector-modal" role="dialog" aria-modal="true" aria-labelledby="connectorTitle">
+        <button class="modal-close" id="connectorClose" aria-label="Close">×</button>
+        <span class="modal-icon pulse-small">⌁</span><span class="section-label">Private, local sync</span>
+        <h2 id="connectorTitle">Connect your Substack session</h2>
+        <p>Install the included Chrome extension, then visit your Substack publisher dashboard while signed in. Pulse captures only dashboard JSON responses and keeps them in extension storage on this device.</p>
+        <ol class="setup-steps"><li>Open <code>chrome://extensions</code>.</li><li>Enable <b>Developer mode</b> and choose <b>Load unpacked</b>.</li><li>Select this project’s <code>extension</code> folder.</li><li>Visit your Substack dashboard, browse its analytics and comments pages, then return here and select <b>Sync now</b>.</li></ol>
+        <div class="privacy-note">No password or session cookie is read, copied, or stored by Pulse.</div>
       </section>
     </div>
 
