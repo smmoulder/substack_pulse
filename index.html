@@ -3,87 +3,134 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#080914" />
-    <meta name="description" content="Starweaver — a tiny arcade game about collecting light and escaping the void." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070812'/%3E%3Cpath d='M32 7l5 20 20 5-20 5-5 20-5-20-20-5 20-5z' fill='%23ffd476'/%3E%3C/svg%3E" />
-    <title>Starweaver</title>
+    <meta name="theme-color" content="#f7f8f4" />
+    <meta name="description" content="Substack Pulse turns publication activity into a clear, human-first inbox." />
+    <title>Substack Pulse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="ambient ambient-one"></div>
-    <div class="ambient ambient-two"></div>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#" aria-label="Substack Pulse home">
+        <span class="brand-mark"><i></i><i></i><i></i><i></i></span>
+        <span>Substack <b>Pulse</b></span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <button class="nav-item active" data-section="overview"><span class="nav-icon">⌂</span>Overview</button>
+        <button class="nav-item" data-section="inbox"><span class="nav-icon">↳</span>Reply inbox<span class="nav-count" id="navCount">12</span></button>
+        <button class="nav-item" data-section="content"><span class="nav-icon">▤</span>Content</button>
+        <button class="nav-item" data-section="audience"><span class="nav-icon">♙</span>Audience</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="nav-item" id="settingsButton"><span class="nav-icon">⚙</span>Settings</button>
+        <div class="profile">
+          <div class="avatar">SM</div>
+          <div><strong>Sam's Newsletter</strong><span>sam.substack.com</span></div>
+          <button aria-label="Profile options">•••</button>
+        </div>
+      </div>
+    </aside>
 
-    <main class="shell">
+    <main>
       <header class="topbar">
-        <a class="brand" href="#" aria-label="Starweaver home">
-          <span class="brand-mark">✦</span>
-          <span>STARWEAVER</span>
-        </a>
-        <button class="icon-button" id="soundButton" type="button" aria-label="Turn sound on" aria-pressed="false">
-          <span id="soundIcon">♪</span>
-        </button>
+        <button class="mobile-menu" id="menuButton" aria-label="Open navigation">☰</button>
+        <div class="topbar-title"><span>Publication</span><strong>Sam's Newsletter</strong></div>
+        <div class="top-actions">
+          <span class="sync-status"><i></i> Synced 4 min ago</span>
+          <button class="icon-btn" aria-label="Notifications">♢<span></span></button>
+          <button class="import-btn" id="importButton"><span>↥</span> Import data</button>
+        </div>
       </header>
 
-      <section class="hero">
-        <div class="eyebrow"><span></span> A pocket arcade odyssey</div>
-        <h1>CHASE THE LIGHT.<br /><em>OUTRUN THE VOID.</em></h1>
-        <p>Thread your ship through a dying constellation. Gather starlight, keep your streak alive, and don't look back.</p>
-      </section>
+      <div class="page">
+        <section class="welcome">
+          <div>
+            <p class="eyebrow">Sunday, September 20</p>
+            <h1>Good morning, Sam.</h1>
+            <p>Here's what deserves your attention today.</p>
+          </div>
+          <div class="date-filter"><span>Last 30 days</span><button aria-label="Change date range">⌄</button></div>
+        </section>
 
-      <section class="game-card" id="gameCard">
-        <div class="canvas-wrap">
-          <canvas id="gameCanvas" aria-label="Starweaver game area"></canvas>
-          <div class="game-hud" aria-live="polite">
-            <div class="spark-status">
-              <span class="hud-label">Spark</span>
-              <div class="meter spark-meter" id="sparkMeter" role="meter" aria-label="Spark meter" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0">
-                <i></i><i></i><i></i><i></i><i></i>
-              </div>
-              <strong class="multiplier" id="multiplier">×1</strong>
+        <section class="attention-card">
+          <div class="attention-icon">↳</div>
+          <div class="attention-copy">
+            <span class="section-label">Needs your attention</span>
+            <h2><strong id="waitingTotal">12 readers</strong> are waiting to hear from you</h2>
+            <p>Your oldest unanswered message is 8 days old.</p>
+          </div>
+          <div class="avatar-stack" aria-label="Readers waiting"><span>MK</span><span>JD</span><span>AL</span><span>+9</span></div>
+          <button class="dark-btn" id="reviewButton">Review replies <span>→</span></button>
+        </section>
+
+        <section class="metrics" aria-label="Publication metrics">
+          <article class="metric-card">
+            <div class="metric-head"><span>Total subscribers</span><span class="trend up">↗ 8.2%</span></div>
+            <strong>4,862</strong><p><span class="sparkline green"></span>+368 this month</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span>Open rate</span><span class="trend up">↗ 2.4%</span></div>
+            <strong>51.8%</strong><p><span class="sparkline orange"></span>Top 15% of publications</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span>Paid subscribers</span><span class="trend up">↗ 5.1%</span></div>
+            <strong>342</strong><p><span class="sparkline purple"></span>7.0% conversion rate</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span>30-day revenue</span><span class="trend neutral">— 0.6%</span></div>
+            <strong>$2,184</strong><p><span class="sparkline blue"></span>$26,208 annualized</p>
+          </article>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="panel reply-panel" id="replyPanel">
+            <div class="panel-heading">
+              <div><span class="section-label">Reply inbox</span><h3>People waiting on you</h3></div>
+              <button class="text-btn" id="viewAllButton">View all <span>→</span></button>
             </div>
-            <div class="time-status"><span class="hud-label">Time</span><strong id="time">45</strong></div>
-            <div class="life-status">
-              <span class="hud-label">Void damage</span>
-              <div class="meter life-meter" id="lifeMeter" role="meter" aria-label="Void damage: 0 of 3 hits" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0">
-                <i></i><i></i><i></i>
-              </div>
+            <div class="tabs" role="tablist">
+              <button class="active" data-filter="all">All <b>12</b></button>
+              <button data-filter="never">Never replied <b>8</b></button>
+              <button data-filter="follow">Follow up <b>4</b></button>
             </div>
-            <div class="score-status"><span class="hud-label">Score</span><strong id="score">0000</strong></div>
-          </div>
-          <div class="overlay visible" id="startOverlay">
-            <div class="sigil">✦</div>
-            <p class="overlay-kicker">The constellation is fading</p>
-            <h2>READY TO WEAVE?</h2>
-            <p>Collect <b>golden sparks</b> to build a streak.<br />Three <b class="danger-text">void shard</b> hits end the run.</p>
-            <button class="primary-button" id="startButton" type="button">Begin the run <span>→</span></button>
-            <span class="key-hint">Press space to start</span>
-          </div>
+            <div class="reply-list" id="replyList"></div>
+          </article>
 
-          <div class="overlay" id="endOverlay">
-            <p class="overlay-kicker">Run complete</p>
-            <h2 id="endTitle">THE LIGHT REMEMBERS</h2>
-            <div class="result-row"><span>Final score</span><strong id="finalScore">0000</strong></div>
-            <div class="result-row"><span>Best multiplier</span><strong id="finalStreak">×1</strong></div>
-            <button class="primary-button" id="restartButton" type="button">Weave again <span>↻</span></button>
-          </div>
+          <aside class="right-column">
+            <article class="panel cadence-panel">
+              <div class="panel-heading"><div><span class="section-label">Publishing cadence</span><h3>Your consistency</h3></div><span class="period">12 weeks</span></div>
+              <div class="cadence-main"><strong>1.8</strong><span>posts<br/>per week</span><em>↗ 0.3</em></div>
+              <div class="cadence-chart" id="cadenceChart" aria-label="Weekly publishing cadence chart"></div>
+              <div class="chart-labels"><span>Jul 6</span><span>Aug 3</span><span>Aug 31</span><span>Sep 20</span></div>
+              <p class="insight"><span>✦</span><b>Your sweet spot is 2 posts a week.</b> Weeks with 2 posts see 18% more engagement.</p>
+            </article>
 
-          <div class="pause-badge" id="pauseBadge">Paused</div>
-          <div class="combo" id="combo">×2 STREAK</div>
-        </div>
-
-        <div class="controls">
-          <div class="control-copy"><span>Move</span><kbd>A</kbd><kbd>←</kbd><span class="divider">/</span><kbd>D</kbd><kbd>→</kbd></div>
-          <button class="pause-button" id="pauseButton" type="button" aria-label="Pause game"><span>Ⅱ</span> Pause</button>
-        </div>
-      </section>
-
-      <div class="mobile-controls" aria-label="Touch controls">
-        <button id="leftButton" type="button" aria-label="Move left">←</button>
-        <button id="rightButton" type="button" aria-label="Move right">→</button>
+            <article class="panel top-content">
+              <div class="panel-heading"><div><span class="section-label">Top content</span><h3>What's resonating</h3></div><button class="text-btn">See all</button></div>
+              <div class="content-row"><span class="rank">01</span><div><strong>The quiet advantage of showing up</strong><p>Sep 12 · 6 min read</p></div><b>68%<small>engagement</small></b></div>
+              <div class="content-row"><span class="rank">02</span><div><strong>What I learned from 100 letters</strong><p>Aug 29 · 8 min read</p></div><b>61%<small>engagement</small></b></div>
+              <div class="content-row"><span class="rank">03</span><div><strong>A field guide to creative momentum</strong><p>Sep 5 · 11 min read</p></div><b>57%<small>engagement</small></b></div>
+            </article>
+          </aside>
+        </section>
       </div>
-
-      <footer><span>✦</span> Woven for the quiet moments between worlds <span>✦</span></footer>
     </main>
+
+    <div class="modal-backdrop" id="importModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+        <span class="modal-icon">↥</span><span class="section-label">Update your dashboard</span>
+        <h2 id="modalTitle">Import Substack data</h2>
+        <p>Export your data from Substack, then upload the CSV files here. Your data stays in this browser.</p>
+        <label class="dropzone" for="fileInput"><span>＋</span><strong>Choose CSV files</strong><small>or drag and drop them here</small></label>
+        <input type="file" id="fileInput" accept=".csv" multiple hidden />
+        <div class="privacy-note">♢ Your files are processed locally and never leave your device.</div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status">Marked as replied</div>
     <script src="game.js"></script>
   </body>
 </html>
