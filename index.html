@@ -14,12 +14,12 @@
   <body>
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="#" aria-label="Substack Pulse home">
-        <span class="brand-mark"><i></i><i></i><i></i><i></i></span>
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 20"><path d="M1 10h6l3-7 5 15 4-11 3 3h9" /></svg></span>
         <span>Substack <b>Pulse</b></span>
       </a>
       <nav aria-label="Primary navigation">
         <button class="nav-item active" data-section="overview"><span class="nav-icon">⌂</span>Overview</button>
-        <button class="nav-item" data-section="inbox"><span class="nav-icon">↳</span>Reply inbox<span class="nav-count" id="navCount">12</span></button>
+        <button class="nav-item" data-section="inbox"><span class="nav-icon">↳</span>Reply inbox<span class="nav-count" id="navCount">0</span></button>
         <button class="nav-item" data-section="content"><span class="nav-icon">▤</span>Content</button>
         <button class="nav-item" data-section="audience"><span class="nav-icon">♙</span>Audience</button>
       </nav>
@@ -27,7 +27,7 @@
         <button class="nav-item" id="settingsButton"><span class="nav-icon">⚙</span>Settings</button>
         <div class="profile">
           <div class="avatar">SM</div>
-          <div><strong>Sam's Newsletter</strong><span>sam.substack.com</span></div>
+          <div><strong id="profileName">Stuart Moulder</strong><span id="profilePublication">Substack publication</span></div>
           <button aria-label="Profile options">•••</button>
         </div>
       </div>
@@ -36,9 +36,9 @@
     <main>
       <header class="topbar">
         <button class="mobile-menu" id="menuButton" aria-label="Open navigation">☰</button>
-        <div class="topbar-title"><span>Publication</span><strong>Sam's Newsletter</strong></div>
+        <div class="topbar-title"><span>Publication</span><strong id="publicationName">Stuart Moulder</strong></div>
         <div class="top-actions">
-          <span class="sync-status"><i></i> Synced 4 min ago</span>
+          <span class="sync-status" id="syncStatus"><i></i> No data imported</span>
           <button class="icon-btn" aria-label="Notifications">♢<span></span></button>
           <button class="import-btn" id="importButton"><span>↥</span> Import data</button>
         </div>
@@ -47,8 +47,8 @@
       <div class="page">
         <section class="welcome">
           <div>
-            <p class="eyebrow">Sunday, September 20</p>
-            <h1>Good morning, Sam.</h1>
+            <p class="eyebrow" id="todayLabel"></p>
+            <h1>Welcome, Stuart.</h1>
             <p>Here's what deserves your attention today.</p>
           </div>
           <div class="date-filter"><span>Last 30 days</span><button aria-label="Change date range">⌄</button></div>
@@ -58,29 +58,29 @@
           <div class="attention-icon">↳</div>
           <div class="attention-copy">
             <span class="section-label">Needs your attention</span>
-            <h2><strong id="waitingTotal">12 readers</strong> are waiting to hear from you</h2>
-            <p>Your oldest unanswered message is 8 days old.</p>
+            <h2 id="attentionTitle"><strong id="waitingTotal">Not available</strong></h2>
+            <p id="attentionDetail">Import comments or notes CSV files to find conversations waiting on you.</p>
           </div>
-          <div class="avatar-stack" aria-label="Readers waiting"><span>MK</span><span>JD</span><span>AL</span><span>+9</span></div>
+          <div class="avatar-stack" id="waitingAvatars" aria-label="Readers waiting"></div>
           <button class="dark-btn" id="reviewButton">Review replies <span>→</span></button>
         </section>
 
         <section class="metrics" aria-label="Publication metrics">
           <article class="metric-card">
-            <div class="metric-head"><span>Total subscribers</span><span class="trend up">↗ 8.2%</span></div>
-            <strong>4,862</strong><p><span class="sparkline green"></span>+368 this month</p>
+            <div class="metric-head"><span>Total subscribers</span><span class="trend" id="subscriberTrend"></span></div>
+            <strong id="subscriberTotal">Not available</strong><p id="subscriberDetail">Import subscribers.csv</p>
           </article>
           <article class="metric-card">
-            <div class="metric-head"><span>Open rate</span><span class="trend up">↗ 2.4%</span></div>
-            <strong>51.8%</strong><p><span class="sparkline orange"></span>Top 15% of publications</p>
+            <div class="metric-head"><span>Average open rate</span><span class="trend" id="openRateTrend"></span></div>
+            <strong id="openRate">Not available</strong><p id="openRateDetail">Import post statistics</p>
           </article>
           <article class="metric-card">
-            <div class="metric-head"><span>Paid subscribers</span><span class="trend up">↗ 5.1%</span></div>
-            <strong>342</strong><p><span class="sparkline purple"></span>7.0% conversion rate</p>
+            <div class="metric-head"><span>Paid subscribers</span><span class="trend" id="paidTrend"></span></div>
+            <strong id="paidTotal">Not available</strong><p id="paidDetail">Import subscribers.csv</p>
           </article>
           <article class="metric-card">
-            <div class="metric-head"><span>30-day revenue</span><span class="trend neutral">— 0.6%</span></div>
-            <strong>$2,184</strong><p><span class="sparkline blue"></span>$26,208 annualized</p>
+            <div class="metric-head"><span>30-day revenue</span><span class="trend" id="revenueTrend"></span></div>
+            <strong id="revenueTotal">Not available</strong><p id="revenueDetail">Not included in the imported export</p>
           </article>
         </section>
 
@@ -91,9 +91,9 @@
               <button class="text-btn" id="viewAllButton">View all <span>→</span></button>
             </div>
             <div class="tabs" role="tablist">
-              <button class="active" data-filter="all">All <b>12</b></button>
-              <button data-filter="never">Never replied <b>8</b></button>
-              <button data-filter="follow">Follow up <b>4</b></button>
+              <button class="active" data-filter="all">All <b id="allCount">0</b></button>
+              <button data-filter="never">Never replied <b id="neverCount">0</b></button>
+              <button data-filter="follow">Follow up <b id="followCount">0</b></button>
             </div>
             <div class="reply-list" id="replyList"></div>
           </article>
@@ -101,17 +101,15 @@
           <aside class="right-column">
             <article class="panel cadence-panel">
               <div class="panel-heading"><div><span class="section-label">Publishing cadence</span><h3>Your consistency</h3></div><span class="period">12 weeks</span></div>
-              <div class="cadence-main"><strong>1.8</strong><span>posts<br/>per week</span><em>↗ 0.3</em></div>
+              <div class="cadence-main"><strong id="cadenceValue">Not available</strong><span>posts<br/>per week</span><em id="cadenceTrend"></em></div>
               <div class="cadence-chart" id="cadenceChart" aria-label="Weekly publishing cadence chart"></div>
-              <div class="chart-labels"><span>Jul 6</span><span>Aug 3</span><span>Aug 31</span><span>Sep 20</span></div>
-              <p class="insight"><span>✦</span><b>Your sweet spot is 2 posts a week.</b> Weeks with 2 posts see 18% more engagement.</p>
+              <div class="chart-labels" id="chartLabels"><span>—</span><span>—</span></div>
+              <p class="insight" id="cadenceInsight"><span>⌁</span>Import posts.csv to calculate your publishing cadence.</p>
             </article>
 
             <article class="panel top-content">
               <div class="panel-heading"><div><span class="section-label">Top content</span><h3>What's resonating</h3></div><button class="text-btn">See all</button></div>
-              <div class="content-row"><span class="rank">01</span><div><strong>The quiet advantage of showing up</strong><p>Sep 12 · 6 min read</p></div><b>68%<small>engagement</small></b></div>
-              <div class="content-row"><span class="rank">02</span><div><strong>What I learned from 100 letters</strong><p>Aug 29 · 8 min read</p></div><b>61%<small>engagement</small></b></div>
-              <div class="content-row"><span class="rank">03</span><div><strong>A field guide to creative momentum</strong><p>Sep 5 · 11 min read</p></div><b>57%<small>engagement</small></b></div>
+              <div id="topContentList" class="empty compact"><strong>No post data yet.</strong>Import post statistics to see what resonates.</div>
             </article>
           </aside>
         </section>
@@ -123,14 +121,15 @@
         <button class="modal-close" id="modalClose" aria-label="Close">×</button>
         <span class="modal-icon">↥</span><span class="section-label">Update your dashboard</span>
         <h2 id="modalTitle">Import Substack data</h2>
-        <p>Export your data from Substack, then upload the CSV files here. Your data stays in this browser.</p>
-        <label class="dropzone" for="fileInput"><span>＋</span><strong>Choose CSV files</strong><small>or drag and drop them here</small></label>
+        <p>Choose all CSV files from your Substack export. Pulse recognizes subscriber, post, comment, note, and statistics files.</p>
+        <label class="dropzone" id="dropzone" for="fileInput"><span>＋</span><strong>Choose CSV files</strong><small>or drag and drop them here</small></label>
         <input type="file" id="fileInput" accept=".csv" multiple hidden />
-        <div class="privacy-note">♢ Your files are processed locally and never leave your device.</div>
+        <div class="import-status" id="importStatus" aria-live="polite"></div>
+        <div class="privacy-note">♢ Your files are parsed locally and never leave your device.</div>
       </section>
     </div>
 
     <div class="toast" id="toast" role="status">Marked as replied</div>
-    <script src="game.js"></script>
+    <script src="pulse.js"></script>
   </body>
 </html>
