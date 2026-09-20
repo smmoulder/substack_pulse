@@ -8,11 +8,15 @@
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
   const aliases = {
-    name: ['name', 'user_name', 'display_name', 'author_name', 'subscriber_name', 'first_name'],
+    name: ['name', 'user_name', 'display_name', 'author_name', 'commenter_name', 'subscriber_name', 'first_name'],
     email: ['email', 'email_address', 'user_email'],
+    handle: ['handle', 'username', 'user_handle', 'author_handle', 'commenter_handle'],
+    userId: ['user_id', 'author_id', 'commenter_id', 'subscriber_id'],
+    profileUrl: ['profile_url', 'author_url', 'user_url'],
+    commentUrl: ['comment_url', 'thread_url', 'reply_url', 'note_url'],
     status: ['status', 'subscription_status', 'subscriber_status'],
     plan: ['plan', 'type', 'subscription_type', 'subscription_tier', 'plan_name', 'is_paid', 'stripe_subscription_status'],
-    created: ['created_at', 'created', 'date', 'post_date', 'published_at', 'publication_date', 'email_sent_at', 'timestamp'],
+    created: ['created_at', 'created', 'date', 'post_date', 'published_at', 'publication_date', 'email_sent_at', 'paid_at', 'transaction_date', 'timestamp'],
     title: ['title', 'post_title', 'subject'],
     subtitle: ['subtitle', 'description'],
     body: ['body', 'comment', 'text', 'content', 'message'],
@@ -24,7 +28,7 @@
     opens: ['opens', 'email_opens', 'unique_opens'],
     likes: ['likes', 'reactions', 'like_count'],
     commentCount: ['comments', 'comment_count', 'comments_count'],
-    revenue: ['revenue', 'amount', 'net_revenue', 'gross_revenue'],
+    revenue: ['revenue', 'amount', 'amount_paid', 'payment_amount', 'net_amount', 'gross_amount', 'net_revenue', 'gross_revenue', 'earnings', 'payout_amount', 'revenue_usd'],
     currency: ['currency', 'currency_code'],
     url: ['url', 'canonical_url', 'post_url']
   };
@@ -84,7 +88,7 @@
     if (/comment|reply|thread/.test(name) || headers.some((h) => ['parent_comment_id', 'comment_id'].includes(h))) return 'comments';
     if (/note/.test(name)) return 'comments';
     if (/post|publication|article|stat/.test(name) || headers.some((h) => ['post_id', 'open_rate', 'email_open_rate'].includes(h))) return 'posts';
-    if (/payment|revenue|transaction/.test(name)) return 'revenue';
+    if (/payment|revenue|transaction|payout|earning/.test(name) || (headers.some((header) => aliases.revenue.includes(header)) && headers.some((header) => aliases.currency.includes(header)))) return 'revenue';
     return 'unknown';
   }
 
@@ -124,7 +128,21 @@
   }
 
   function commentIdentity(row) {
-    return get(row, aliases.name) || get(row, aliases.email) || 'Reader';
+    return readerInfo(row).name;
+  }
+
+  function readerInfo(row) {
+    const email = get(row, aliases.email);
+    const userId = get(row, aliases.userId);
+    const subscriber = state.subscribers.find((item) => (email && get(item, aliases.email) === email) || (userId && get(item, aliases.userId) === userId));
+    const handle = get(row, aliases.handle) || (subscriber && get(subscriber, aliases.handle)) || '';
+    return {
+      name: get(row, aliases.name) || (subscriber && get(subscriber, aliases.name)) || handle || email || 'Reader',
+      email: email || (subscriber && get(subscriber, aliases.email)) || '',
+      handle,
+      userId,
+      profileUrl: get(row, aliases.profileUrl) || (subscriber && get(subscriber, aliases.profileUrl)) || ''
+    };
   }
 
   function deriveReplies() {
@@ -137,7 +155,8 @@
     const owner = OWNER_NAME.toLowerCase();
     const waiting = [];
     byId.forEach((row, id) => {
-      const author = commentIdentity(row);
+      const reader = readerInfo(row);
+      const author = reader.name;
       if (author.toLowerCase().includes(owner) || get(row, aliases.parent)) return;
       const descendants = children.get(id) || [];
       const ownerReplied = descendants.some((reply) => commentIdentity(reply).toLowerCase().includes(owner));
@@ -145,11 +164,14 @@
       const date = validDate(get(row, aliases.created));
       const postId = get(row, aliases.postId);
       const post = state.posts.find((item) => item.id && item.id === postId);
+      const directUrl = get(row, aliases.commentUrl);
       waiting.push({
         id, name: author, initials: initials(author), type: descendants.length ? 'follow' : 'never',
         tag: descendants.length ? 'Follow up' : 'Never replied',
         message: get(row, aliases.body) || 'Message text not included in this export.',
         source: post?.title || get(row, aliases.title) || 'Substack conversation',
+        email: reader.email, handle: reader.handle, readerId: reader.userId,
+        url: directUrl || post?.url || reader.profileUrl || '',
         date: date ? date.toISOString() : '', age: date ? relativeDate(date) : 'Date not available'
       });
     });
@@ -197,9 +219,9 @@
   }
 
   function compactRows(type, rows) {
-    if (type === 'subscribers') return rows.map((row) => ({ email: get(row, aliases.email), name: get(row, aliases.name), status: get(row, aliases.status), plan: get(row, aliases.plan), created_at: get(row, aliases.created) }));
+    if (type === 'subscribers') return rows.map((row) => ({ email: get(row, aliases.email), name: get(row, aliases.name), handle: get(row, aliases.handle), user_id: get(row, aliases.userId), profile_url: get(row, aliases.profileUrl), status: get(row, aliases.status), plan: get(row, aliases.plan), created_at: get(row, aliases.created) }));
     if (type === 'posts') return rows.map((row) => ({ post_id: get(row, aliases.postId) || get(row, aliases.id), title: get(row, aliases.title), subtitle: get(row, aliases.subtitle), created_at: get(row, aliases.created), open_rate: get(row, aliases.openRate), views: get(row, aliases.views), opens: get(row, aliases.opens), likes: get(row, aliases.likes), comments: get(row, aliases.commentCount), url: get(row, aliases.url) }));
-    if (type === 'comments') return rows.map((row) => ({ id: get(row, aliases.id), parent_id: get(row, aliases.parent), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), user_email: get(row, aliases.email), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }));
+    if (type === 'comments') return rows.map((row) => ({ id: get(row, aliases.id), parent_id: get(row, aliases.parent), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), author_handle: get(row, aliases.handle), author_id: get(row, aliases.userId), user_email: get(row, aliases.email), profile_url: get(row, aliases.profileUrl), comment_url: get(row, aliases.commentUrl), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }));
     if (type === 'revenue') return rows.map((row) => ({ amount: get(row, aliases.revenue), currency: get(row, aliases.currency), created_at: get(row, aliases.created) }));
     return [];
   }
@@ -240,7 +262,7 @@
       subscribers: state.subscribers.length ? activeSubscribers.length : null,
       newSubscribers: state.subscribers.length ? newSubscribers : null,
       paid: state.subscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length : null,
-      conversion: activeSubscribers.length && paid.length ? paid.length / activeSubscribers.length : null,
+      conversion: activeSubscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length / activeSubscribers.length : null,
       openRate: postRates.length ? postRates.reduce((sum, rate) => sum + rate, 0) / postRates.length : null,
       revenue, currency: recentRevenue.find((row) => row.currency)?.currency || 'USD',
       posts: state.posts, datedPosts: datedPosts.map((post) => ({ ...post, parsedDate: post.parsedDate.toISOString() })),
@@ -283,7 +305,9 @@
     $('#openRate').textContent = available(data.openRate, formatPercent);
     $('#openRateDetail').textContent = data.openRate === null ? 'Open-rate fields not included for this range' : `Average across ${postsInRange(state.posts).filter((post) => post.openRate !== null).length} posts in ${rangeLabel}`;
     $('#revenueTotal').textContent = available(data.revenue, (value) => new Intl.NumberFormat('en', { style: 'currency', currency: data.currency || 'USD', maximumFractionDigits: 0 }).format(value));
-    $('#revenueDetail').textContent = data.revenue === null ? 'Revenue not included in export' : `From imported transactions in ${rangeLabel}`;
+    $('#revenueDetail').textContent = data.revenue === null
+      ? (state.capabilities.revenue ? `No revenue transactions found in ${rangeLabel}` : 'No revenue or payout fields found in imported files')
+      : `From imported transactions in ${rangeLabel}`;
     if (data.importedAt) $('#syncStatus').innerHTML = `<i></i> Imported ${relativeDate(new Date(data.importedAt)).toLowerCase()}`;
     renderSources();
     renderReplies();
@@ -317,8 +341,9 @@
     $('#replyList').innerHTML = visible.length ? visible.map((reply) => `
       <article class="reply-item"><div class="reply-avatar">${escapeHTML(reply.initials)}</div><div class="reply-body">
       <div class="reply-meta"><strong>${escapeHTML(reply.name)}</strong><span class="badge ${reply.type}">${reply.tag}</span></div>
+      <div class="reader-details">${reply.handle ? `@${escapeHTML(reply.handle.replace(/^@/, ''))}` : ''}${reply.email ? `<span>${escapeHTML(reply.email)}</span>` : ''}${!reply.handle && !reply.email ? `<span>Comment ID ${escapeHTML(reply.id)}</span>` : ''}</div>
       <p>${escapeHTML(reply.message)}</p><small>On “${escapeHTML(reply.source)}” · ${escapeHTML(reply.age)}</small></div>
-      <button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></article>`).join('')
+      <div class="reply-actions">${safeUrl(reply.url) ? `<a class="reply-action" href="${escapeHTML(safeUrl(reply.url))}" target="_blank" rel="noopener">Open in Substack ↗</a>` : ''}<button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></div></article>`).join('')
       : `<div class="empty"><strong>${state.capabilities.comments ? 'You’re all caught up.' : 'Reply data is not available yet.'}</strong>${state.capabilities.comments ? 'No replies in this view need your attention.' : 'Open the comments and Notes pages in Substack with the connector installed, then sync again.'}</div>`;
   }
 
@@ -364,6 +389,7 @@
   }
 
   function formatDate(date) { return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date); }
+  function safeUrl(value) { try { const url = new URL(value, 'https://smmoulder.substack.com'); return value && ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; } }
   function escapeHTML(value) { const node = document.createElement('div'); node.textContent = String(value ?? ''); return node.innerHTML; }
   function saveDerived(data) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch { /* The dashboard still works for this session. */ } }
   function restoreDerived() { try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (saved) { state.files = saved.files || []; render(saved); } } catch { localStorage.removeItem(STORAGE_KEY); } }
@@ -408,6 +434,8 @@
         if (value.name || value.display_name) normalized.author_name = String(value.name || value.display_name);
         if (value.email) normalized.user_email = String(value.email);
         if (value.id) normalized.author_id = String(value.id);
+        if (value.handle || value.username) normalized.author_handle = String(value.handle || value.username);
+        if (value.profile_url || value.url) normalized.profile_url = String(value.profile_url || value.url);
       }
     });
     return normalized;
@@ -503,7 +531,7 @@
   ['dragleave', 'drop'].forEach((type) => $('#dropzone').addEventListener(type, (event) => { event.preventDefault(); $('#dropzone').classList.remove('dragging'); }));
   $('#dropzone').addEventListener('drop', (event) => handleFiles(event.dataTransfer.files));
   $$('.tabs button').forEach((button) => button.addEventListener('click', () => { $('.tabs button.active').classList.remove('active'); button.classList.add('active'); state.activeFilter = button.dataset.filter; renderReplies(); }));
-  $('#replyList').addEventListener('click', (event) => { const button = event.target.closest('.reply-action'); if (!button) return; state.dismissed.push(button.dataset.id); state.replies = state.replies.filter((reply) => reply.id !== button.dataset.id); const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); saveDerived({ ...saved, replies: state.replies, dismissed: state.dismissed }); renderReplies(); showToast(`${button.dataset.name} marked as replied`); });
+  $('#replyList').addEventListener('click', (event) => { const button = event.target.closest('button.reply-action'); if (!button) return; state.dismissed.push(button.dataset.id); state.replies = state.replies.filter((reply) => reply.id !== button.dataset.id); const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); saveDerived({ ...saved, replies: state.replies, dismissed: state.dismissed }); renderReplies(); showToast(`${button.dataset.name} marked as replied`); });
   $('#reviewButton').addEventListener('click', () => $('#replyPanel').scrollIntoView({ behavior: 'smooth' }));
   $('#viewAllButton').addEventListener('click', () => $('.tabs button[data-filter="all"]').click());
   $('#menuButton').addEventListener('click', () => $('#sidebar').classList.toggle('open'));

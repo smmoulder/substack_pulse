@@ -30,6 +30,10 @@ The source strip explains where displayed values came from. Publishing cadence c
 
 The date-range control supports **Last 30 days**, **Last 90 days**, and **All time**. It recalculates recent subscribers, open rate, revenue, cadence, and top content from records in the selected period. Current total and paid subscriber counts remain current totals. **What's resonating** uses views when any view data is available for the selected period, otherwise opens, then open rate, then combined likes and comments; the metric in use is displayed in the card heading.
 
+Revenue is calculated only when an imported payment, payout, transaction, or revenue file contains an amount field; Pulse never estimates revenue from paid-subscriber counts. The revenue card distinguishes a missing revenue dataset from a valid dataset with no transactions in the selected range.
+
+Reply cards retain and display every traceable reader field supplied by the export or connector: name, handle, email, comment ID, and profile/comment/post URL. When a URL is available, **Open in Substack** takes you back to the closest exported location for replying. Exports that omit identity fields still show the comment ID rather than inventing a reader name.
+
 ## Optional local live connector
 
 The [`extension`](extension/) directory contains an unpacked Manifest V3 browser extension. It observes JSON responses that the signed-in Substack publisher dashboard already loads, removes credential-like fields, stores a limited local snapshot, and retrieves the public feed for `smmoulder.substack.com`. Pulse's **Sync now** button reads that snapshot without uploading it to an application server.
