@@ -24,6 +24,8 @@
     body: ['body', 'comment', 'text', 'content', 'message'],
     id: ['id', 'comment_id', 'note_id'],
     parent: ['parent_id', 'parent_comment_id', 'reply_to_id', 'ancestor_id'],
+    rootId: ['root_id', 'root_comment_id', 'thread_root_id', 'conversation_id'],
+    threadId: ['thread_id', 'comment_thread_id'],
     postId: ['post_id', 'publication_id', 'article_id'],
     openRate: ['open_rate', 'email_open_rate', 'opens_rate', 'open rate'],
     views: ['views', 'web_views', 'total_views', 'view_count'],
@@ -150,44 +152,63 @@
 
   function deriveReplies() {
     const byId = new Map(state.comments.map((row, index) => [get(row, aliases.id) || `unstable-row-${index}`, row]));
-    const children = new Map();
-    state.comments.forEach((row) => {
-      const parent = get(row, aliases.parent);
-      if (parent) children.set(parent, [...(children.get(parent) || []), row]);
-    });
-    const owner = OWNER_NAME.toLowerCase();
+    const rootFor = (row) => {
+      const explicit = get(row, aliases.rootId) || get(row, aliases.threadId);
+      if (explicit) return explicit;
+      let current = row; const visited = new Set();
+      while (get(current, aliases.parent) && byId.has(get(current, aliases.parent)) && !visited.has(get(current, aliases.parent))) {
+        visited.add(get(current, aliases.parent)); current = byId.get(get(current, aliases.parent));
+      }
+      return get(current, aliases.id) || get(row, aliases.id);
+    };
+    const threads = new Map();
+    state.comments.forEach((row) => { const key = rootFor(row); if (key) threads.set(key, [...(threads.get(key) || []), row]); });
     const conversations = [];
-    byId.forEach((row, id) => {
+    threads.forEach((thread, threadId) => {
+      const ordered = [...thread].sort((a, b) => (validDate(get(a, aliases.created))?.getTime() || 0) - (validDate(get(b, aliases.created))?.getTime() || 0));
+      const root = ordered.find((row) => get(row, aliases.id) === threadId) || ordered.find((row) => !get(row, aliases.parent)) || ordered[0];
+      const readerMessages = ordered.filter((row) => !isOwnerMessage(row));
+      const row = readerMessages.at(-1);
+      if (!row) return;
+      const id = get(row, aliases.id) || `unstable-${threadId}`;
       const reader = readerInfo(row);
       const author = reader.name;
-      if (author.toLowerCase().includes(owner) || get(row, aliases.parent)) return;
-      const descendants = collectDescendants(id, children);
-      const ownerReplied = descendants.some((reply) => commentIdentity(reply).toLowerCase().includes(owner));
       const date = validDate(get(row, aliases.created));
-      const postId = get(row, aliases.postId);
+      const postId = get(row, aliases.postId) || get(root, aliases.postId);
       const post = state.posts.find((item) => item.id && item.id === postId);
-      const directUrl = get(row, aliases.commentUrl);
-      const replyCount = numeric(get(row, aliases.replyCount));
-      const explicitComplete = /^(true|1|yes)$/i.test(get(row, aliases.historyComplete));
-      const historyComplete = explicitComplete || (replyCount !== null && descendants.length >= replyCount);
-      const stableId = !id.startsWith('unstable-row-');
+      const directUrl = get(row, aliases.commentUrl) || get(root, aliases.commentUrl);
+      const originalUrl = row.original_url || root.original_url || post?.url || '';
+      const replyCount = numeric(get(root, aliases.replyCount));
+      const explicitComplete = ordered.some((item) => /^(true|1|yes)$/i.test(get(item, aliases.historyComplete)));
+      const historyComplete = explicitComplete || (replyCount !== null && ordered.length - 1 >= replyCount);
+      const stableId = !id.startsWith('unstable');
       const knownAuthor = author !== 'Reader' && author !== 'Identity unavailable';
       const supported = historyComplete && stableId && knownAuthor && Boolean(date);
-      if (supported && ownerReplied) return;
-      const type = supported ? (descendants.length ? 'follow' : 'never') : 'unknown';
+      const readerIndex = ordered.indexOf(row);
+      const ownerBefore = ordered.slice(0, readerIndex).some(isOwnerMessage);
+      const ownerAfter = ordered.slice(readerIndex + 1).some(isOwnerMessage);
+      if (supported && ownerAfter) return;
+      const type = supported ? (ownerBefore ? 'follow' : 'never') : 'unknown';
       const missing = [!knownAuthor && 'author identity', !stableId && 'stable comment ID', !date && 'timestamp', !historyComplete && 'complete reply history'].filter(Boolean);
+      const originalType = row.original_type || root.original_type || 'post';
+      const originalTitle = row.original_title || root.original_title || post?.title || get(row, aliases.title) || get(root, aliases.title) || '';
       conversations.push({
         id, name: knownAuthor ? author : 'Identity unavailable', initials: knownAuthor ? initials(author) : '?', type,
         tag: type === 'follow' ? 'Follow up' : type === 'never' ? 'Never replied' : 'Reply status unknown',
         message: get(row, aliases.body) || 'Message text not included in this export.',
-        source: post?.title || get(row, aliases.title) || 'Thread title unavailable',
+        source: originalTitle || (originalType === 'note' ? 'Note excerpt unavailable' : 'Article title unavailable'),
         email: reader.email, handle: reader.handle, readerId: reader.userId, profileUrl: reader.profileUrl,
-        url: directUrl || post?.url || '',
+        url: directUrl || originalUrl, destinationLabel: directUrl ? 'Open conversation' : (originalType === 'note' ? 'Open original Note' : 'Open original article'),
         statusReason: missing.length ? `Missing ${missing.join(', ')}` : '',
         date: date ? date.toISOString() : '', age: date ? relativeDate(date) : 'Date not available'
       });
     });
     state.replies = conversations.filter((reply) => !state.dismissed.includes(reply.id)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }
+
+  function isOwnerMessage(row) {
+    if (/^(true|1|yes)$/i.test(String(row.is_owner || row.is_author || row.is_publication_author || ''))) return true;
+    return commentIdentity(row).toLowerCase().includes(OWNER_NAME.toLowerCase());
   }
 
   function collectDescendants(id, children, seen = new Set()) {
@@ -242,7 +263,7 @@
   function compactRows(type, rows) {
     if (type === 'subscribers') return rows.map((row) => ({ email: get(row, aliases.email), name: get(row, aliases.name), handle: get(row, aliases.handle), user_id: get(row, aliases.userId), profile_url: get(row, aliases.profileUrl), status: get(row, aliases.status), plan: get(row, aliases.plan), subscriber_revenue: get(row, aliases.subscriberRevenue), currency: get(row, aliases.currency), created_at: get(row, aliases.created) }));
     if (type === 'posts') return rows.map((row) => ({ post_id: get(row, aliases.postId) || get(row, aliases.id), title: get(row, aliases.title), subtitle: get(row, aliases.subtitle), created_at: get(row, aliases.created), open_rate: get(row, aliases.openRate), views: get(row, aliases.views), opens: get(row, aliases.opens), likes: get(row, aliases.likes), comments: get(row, aliases.commentCount), url: get(row, aliases.url) }));
-    if (type === 'comments') return rows.map((row) => ({ id: get(row, aliases.id), parent_id: get(row, aliases.parent), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), author_handle: get(row, aliases.handle), author_id: get(row, aliases.userId), user_email: get(row, aliases.email), profile_url: get(row, aliases.profileUrl), comment_url: get(row, aliases.commentUrl), reply_count: get(row, aliases.replyCount), history_complete: get(row, aliases.historyComplete), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }));
+    if (type === 'comments') return rows.map((row) => { const noteUrl = get(row, ['note_url']); return { id: get(row, aliases.id), parent_id: get(row, aliases.parent), root_id: get(row, aliases.rootId), thread_id: get(row, aliases.threadId), post_id: get(row, aliases.postId), author_name: get(row, aliases.name), author_handle: get(row, aliases.handle), author_id: get(row, aliases.userId), user_email: get(row, aliases.email), profile_url: get(row, aliases.profileUrl), comment_url: get(row, ['comment_url', 'thread_url', 'reply_url', 'permalink']), original_url: noteUrl || get(row, ['post_url']), original_type: noteUrl ? 'note' : 'post', original_title: get(row, ['post_title', 'thread_title', 'note_title']), reply_count: get(row, aliases.replyCount), history_complete: get(row, aliases.historyComplete), is_owner: get(row, ['is_owner', 'is_author', 'is_publication_author']), body: get(row, aliases.body), title: get(row, aliases.title), created_at: get(row, aliases.created) }; });
     if (type === 'revenue') return rows.map((row) => ({ amount: get(row, aliases.revenue), currency: get(row, aliases.currency), created_at: get(row, aliases.created) }));
     return [];
   }
@@ -374,7 +395,7 @@
       <div class="reply-meta"><strong>${escapeHTML(reply.name)}</strong><span class="badge ${reply.type}">${reply.tag}</span></div>
       <div class="reader-details">${reply.handle ? `@${escapeHTML(reply.handle.replace(/^@/, ''))}` : ''}${reply.email ? `<span>${escapeHTML(reply.email)}</span>` : ''}${safeUrl(reply.profileUrl) ? `<a href="${escapeHTML(safeUrl(reply.profileUrl))}" target="_blank" rel="noopener">Reader profile ↗</a>` : ''}${!reply.handle && !reply.email ? `<span>Comment ID ${escapeHTML(reply.id)}</span>` : ''}</div>
       <p>${escapeHTML(reply.message)}</p><small>On “${escapeHTML(reply.source)}” · ${escapeHTML(reply.age)}</small>${reply.statusReason ? `<small class="status-reason">${escapeHTML(reply.statusReason)}</small>` : ''}</div>
-      <div class="reply-actions">${safeUrl(reply.url) ? `<a class="reply-action" href="${escapeHTML(safeUrl(reply.url))}" target="_blank" rel="noopener">Open in Substack ↗</a>` : ''}<button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></div></article>`).join('')
+      <div class="reply-actions">${safeUrl(reply.url) ? `<a class="reply-action primary-reply-action" href="${escapeHTML(safeUrl(reply.url))}" target="_blank" rel="noopener">${escapeHTML(reply.destinationLabel || 'Open in Substack')} ↗</a>` : ''}<button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></div></article>`).join('')
       : `<div class="empty"><strong>${state.capabilities.comments ? 'You’re all caught up.' : 'Reply data is not available yet.'}</strong>${state.capabilities.comments ? 'No replies in this view need your attention.' : 'Open the comments and Notes pages in Substack with the connector installed, then sync again.'}</div>`;
   }
 
@@ -440,23 +461,25 @@
     });
   }
 
-  function walkRecords(value, visit, seen = new WeakSet()) {
+  function walkRecords(value, visit, seen = new WeakSet(), ancestors = []) {
     if (!value || typeof value !== 'object' || seen.has(value)) return;
     seen.add(value);
-    if (!Array.isArray(value)) visit(value);
-    Object.values(value).forEach((child) => walkRecords(child, visit, seen));
+    if (!Array.isArray(value)) visit(value, ancestors);
+    Object.values(value).forEach((child) => walkRecords(child, visit, seen, Array.isArray(value) ? ancestors : [...ancestors, value]));
   }
 
   function recordKind(row, url = '') {
     const keys = Object.keys(row).map(normalizeHeader);
     const has = (...names) => names.some((name) => keys.includes(name));
+    const entityType = String(row.type || row.entity_type || row.object_type || '').toLowerCase();
     if (has('subscription_status', 'subscriber_status', 'is_paid') && has('email', 'email_address')) return 'subscriber';
-    if (has('comment_id', 'parent_comment_id', 'reply_to_id') || (has('body', 'comment', 'text') && (has('post_id') || /comment|note|repl/i.test(url)))) return 'comment';
+    if (/^(note|post|publication)$/.test(entityType)) return entityType === 'post' ? 'post' : '';
+    if (/comment|reply/.test(entityType) || has('comment_id', 'parent_comment_id', 'reply_to_id', 'root_comment_id') || (has('body', 'comment', 'text') && has('id') && /comment|repl/i.test(url))) return 'comment';
     if (has('post_id', 'published_at', 'post_date', 'email_open_rate', 'open_rate') && has('title', 'post_title', 'subject')) return 'post';
     return '';
   }
 
-  function normalizeCapturedRecord(record) {
+  function normalizeCapturedRecord(record, captureUrl = '', ancestors = []) {
     const normalized = {};
     Object.entries(record).forEach(([key, value]) => {
       const cleanKey = normalizeHeader(key);
@@ -467,20 +490,50 @@
         if (value.id) normalized.author_id = String(value.id);
         if (value.handle || value.username) normalized.author_handle = String(value.handle || value.username);
         if (value.profile_url || value.url) normalized.profile_url = String(value.profile_url || value.url);
-      } else if (/^(post|publication|thread)$/.test(cleanKey)) {
+      } else if (/^(post|publication|thread|note)$/.test(cleanKey)) {
         if (value.id) normalized.post_id = String(value.id);
-        if (value.title || value.name) normalized.title = String(value.title || value.name);
-        if (value.canonical_url || value.url) normalized.post_url = String(value.canonical_url || value.url);
+        const isNote = cleanKey === 'note' || /note/i.test(String(value.type || value.entity_type || ''));
+        const originalText = value.title || value.name || (isNote && (value.body || value.text || value.content));
+        if (originalText) normalized.original_title = isNote ? noteLabel(originalText) : String(originalText);
+        if (value.canonical_url || value.url || value.permalink) normalized.original_url = String(value.canonical_url || value.url || value.permalink);
+        normalized.original_type = isNote ? 'note' : 'post';
       } else if (/^(replies|children)$/.test(cleanKey) && Array.isArray(value)) {
         normalized.captured_reply_count = String(value.length);
       }
     });
+    if (!normalized.original_url || !normalized.original_title) applyAncestorContext(normalized, ancestors, captureUrl);
     const declaredReplies = numeric(get(normalized, aliases.replyCount));
     const capturedReplies = numeric(normalized.captured_reply_count);
     const hasMore = record.has_more_replies ?? record.has_more_children ?? record.has_more;
     if (capturedReplies !== null && hasMore === false && (declaredReplies === null || capturedReplies >= declaredReplies)) normalized.history_complete = 'true';
-    if (!normalized.comment_url && typeof record.url === 'string' && /comment|note|reply/i.test(record.url)) normalized.comment_url = record.url;
+    if (!normalized.comment_url) {
+      const candidate = record.comment_url || record.thread_url || record.reply_url || record.permalink || record.canonical_url;
+      if (typeof candidate === 'string' && /comment|reply|notes\//i.test(candidate)) normalized.comment_url = candidate;
+    }
     return normalized;
+  }
+
+  function applyAncestorContext(normalized, ancestors, captureUrl) {
+    for (const ancestor of [...ancestors].reverse()) {
+      if (!ancestor || Array.isArray(ancestor)) continue;
+      const type = String(ancestor.type || ancestor.entity_type || ancestor.object_type || '').toLowerCase();
+      const looksLikeNote = type === 'note' || (!/comment|reply/.test(type) && /notes/i.test(captureUrl) && (ancestor.body || ancestor.text) && (ancestor.user || ancestor.author));
+      const looksLikePost = /post|publication/.test(type) || Boolean(ancestor.title && (ancestor.canonical_url || ancestor.post_url));
+      if (!looksLikeNote && !looksLikePost) continue;
+      const url = ancestor.canonical_url || ancestor.post_url || ancestor.note_url || ancestor.permalink || ancestor.url;
+      const text = ancestor.title || ancestor.name || (looksLikeNote && (ancestor.body || ancestor.text || ancestor.content));
+      if (!normalized.original_url && url) normalized.original_url = String(url);
+      if (!normalized.original_title && text) normalized.original_title = looksLikeNote ? noteLabel(text) : String(text);
+      normalized.original_type ||= looksLikeNote ? 'note' : 'post';
+      if (!normalized.post_id && ancestor.id) normalized.post_id = String(ancestor.id);
+      if (normalized.original_url && normalized.original_title) break;
+    }
+  }
+
+  function noteLabel(value) {
+    const text = String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const excerpt = text.length > 88 ? `${text.slice(0, 85).trim()}…` : text;
+    return excerpt ? `Note: “${excerpt}”` : 'Note excerpt unavailable';
   }
 
   function ingestConnectorPayload(payload) {
@@ -488,8 +541,8 @@
     (payload.captures || []).forEach((capture) => {
       if (/comment|note|repl/i.test(capture.url || '')) state.capabilities.comments = true;
       if (/subscriber|audience|member/i.test(capture.url || '')) state.capabilities.subscribers = true;
-      walkRecords(capture.data, (record) => {
-      const normalized = normalizeCapturedRecord(record);
+      walkRecords(capture.data, (record, ancestors) => {
+      const normalized = normalizeCapturedRecord(record, capture.url, ancestors);
       const kind = recordKind(normalized, capture.url);
       if (kind === 'subscriber') { state.subscribers.push(normalized); state.capabilities.subscribers = true; }
       else if (kind === 'comment') { state.comments.push(normalized); state.capabilities.comments = true; }
