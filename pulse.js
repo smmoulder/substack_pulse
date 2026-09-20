@@ -3,7 +3,7 @@
 
   const OWNER_NAME = 'Stuart Moulder';
   const STORAGE_KEY = 'substack-pulse-derived-v1';
-  const state = { files: [], subscribers: [], posts: [], comments: [], replies: [], dismissed: [], activeFilter: 'all', sources: {} };
+  const state = { files: [], subscribers: [], posts: [], comments: [], replies: [], dismissed: [], activeFilter: 'all', sources: {}, capabilities: {} };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -65,6 +65,7 @@
   }
 
   function numeric(value) {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
     const cleaned = String(value || '').replace(/[%,$£€\s]/g, '').replace(/,/g, '');
     const number = Number(cleaned);
     if (!Number.isFinite(number)) return null;
@@ -104,7 +105,7 @@
       title: get(row, aliases.title) || 'Untitled post',
       subtitle: get(row, aliases.subtitle),
       date: get(row, aliases.created),
-      openRate: rate !== null && rate > 1 ? rate / 100 : rate,
+      openRate: rate !== null && rate > 1 ? rate / 100 : (rate > 0 ? rate : null),
       views: numeric(get(row, aliases.views)),
       opens: numeric(get(row, aliases.opens)),
       likes: numeric(get(row, aliases.likes)),
@@ -174,22 +175,33 @@
     state.posts = [];
     state.comments = [];
     state.dismissed = [];
+    state.capabilities = {};
     const revenues = [];
     for (const file of csvFiles) {
       const rows = parseCSV(await file.text());
       const type = classifyFile(file.name, rows);
       state.files.push({ name: file.name, type, rows: rows.length });
-      if (type === 'subscribers') state.subscribers.push(...rows);
-      else if (type === 'posts') mergePosts(rows);
-      else if (type === 'comments') state.comments.push(...rows);
-      else if (type === 'revenue') revenues.push(...rows);
+      if (type === 'subscribers') { state.subscribers.push(...rows); state.capabilities.subscribers = true; }
+      else if (type === 'posts') { mergePosts(rows); state.capabilities.posts = true; if (rows.some((row) => get(row, aliases.openRate) || get(row, aliases.views) || get(row, aliases.opens) || get(row, aliases.likes))) state.capabilities.engagement = true; }
+      else if (type === 'comments') { state.comments.push(...rows); state.capabilities.comments = true; }
+      else if (type === 'revenue') { revenues.push(...rows); state.capabilities.revenue = true; }
+    }
+    const recognized = state.files.filter((file) => file.type !== 'unknown');
+    if (!recognized.length) {
+      const headers = Object.keys(parseCSV(await csvFiles[0].text())[0] || {}).slice(0, 8);
+      state.files = [];
+      const looksLikeMusic = ['artist', 'album', 'genre', 'plays'].filter((header) => headers.includes(header)).length >= 2;
+      throw new Error(looksLikeMusic
+        ? 'This appears to be a music-library CSV, not a Substack export. In Substack, open Settings → Exports, download the export, extract the ZIP, and select its CSV files.'
+        : `No Substack data was recognized. Found columns: ${headers.join(', ') || 'none'}. Select CSV files from an extracted Substack publication export.`);
     }
     deriveReplies();
     state.sources.privateAt = new Date().toISOString();
     const derived = deriveDashboard(revenues);
     saveDerived(derived);
     render(derived);
-    return `${csvFiles.length} files parsed · ${state.files.reduce((sum, file) => sum + file.rows, 0).toLocaleString()} rows`;
+    const skipped = state.files.length - recognized.length;
+    return `${recognized.length} Substack file${recognized.length === 1 ? '' : 's'} imported · ${recognized.reduce((sum, file) => sum + file.rows, 0).toLocaleString()} rows${skipped ? ` · ${skipped} unrelated file${skipped === 1 ? '' : 's'} skipped` : ''}`;
   }
 
   function deriveDashboard(revenues = []) {
@@ -207,7 +219,7 @@
     const revenue = recentRevenue.length ? recentRevenue.reduce((sum, row) => sum + row.amount, 0) : null;
     const datedPosts = state.posts.map((post) => ({ ...post, parsedDate: validDate(post.date) })).filter((post) => post.parsedDate);
     return {
-      importedAt: new Date().toISOString(), files: state.files, sources: state.sources,
+      importedAt: new Date().toISOString(), files: state.files, sources: state.sources, capabilities: state.capabilities,
       subscribers: state.subscribers.length ? activeSubscribers.length : null,
       newSubscribers: state.subscribers.length ? newSubscribers : null,
       paid: state.subscribers.length && state.subscribers.some((row) => get(row, aliases.plan)) ? paid.length : null,
@@ -224,6 +236,7 @@
     state.replies = data.replies || [];
     state.dismissed = data.dismissed || [];
     state.sources = data.sources || {};
+    state.capabilities = data.capabilities || {};
     const available = (value, formatter = String) => value === null || value === undefined ? 'Not available' : formatter(value);
     $('#subscriberTotal').textContent = available(data.subscribers, (value) => value.toLocaleString());
     $('#subscriberDetail').textContent = data.newSubscribers === null ? 'Import subscribers.csv' : `${data.newSubscribers.toLocaleString()} joined in the last 30 days`;
@@ -245,7 +258,7 @@
   function renderSources() {
     $('#privateSource').textContent = state.sources.privateAt ? `CSV · ${relativeDate(new Date(state.sources.privateAt))}` : 'No CSV snapshot';
     $('#publicSource').textContent = state.sources.publicAt ? `Feed · ${relativeDate(new Date(state.sources.publicAt))}` : 'Not connected';
-    $('#connectorSource').textContent = state.sources.connectorAt ? `Captured · ${relativeDate(new Date(state.sources.connectorAt))}` : 'Extension not detected';
+    $('#connectorSource').textContent = state.sources.connectorAt ? `Captured · ${relativeDate(new Date(state.sources.connectorAt))}${state.sources.connectorSummary ? ` · ${state.sources.connectorSummary}` : ''}` : 'Extension not detected';
     $$('#sourceStrip .source-dot').forEach((dot, index) => dot.classList.toggle('muted', ![state.sources.privateAt, state.sources.publicAt, state.sources.connectorAt][index]));
   }
 
@@ -257,7 +270,7 @@
     $('#allCount').textContent = state.replies.length;
     $('#neverCount').textContent = never;
     $('#followCount').textContent = follow;
-    if (state.files.length || state.replies.length) {
+    if (state.capabilities.comments) {
       $('#attentionTitle').innerHTML = `<strong id="waitingTotal">${state.replies.length} reader${state.replies.length === 1 ? '' : 's'} waiting</strong> to hear from you`;
       const dated = state.replies.map((reply) => validDate(reply.date)).filter(Boolean).sort((a, b) => a - b);
       $('#attentionDetail').textContent = dated.length ? `Your oldest unanswered message is ${relativeDate(dated[0]).toLowerCase()}.` : 'No dated unanswered messages were found.';
@@ -268,7 +281,7 @@
       <div class="reply-meta"><strong>${escapeHTML(reply.name)}</strong><span class="badge ${reply.type}">${reply.tag}</span></div>
       <p>${escapeHTML(reply.message)}</p><small>On “${escapeHTML(reply.source)}” · ${escapeHTML(reply.age)}</small></div>
       <button class="reply-action" data-id="${escapeHTML(reply.id)}" data-name="${escapeHTML(reply.name)}">Mark replied</button></article>`).join('')
-      : `<div class="empty"><strong>${state.files.length ? 'You’re all caught up.' : 'Import your Substack data.'}</strong>${state.files.length ? 'No replies in this view need your attention.' : 'Comments and notes exports will appear here.'}</div>`;
+      : `<div class="empty"><strong>${state.capabilities.comments ? 'You’re all caught up.' : 'Reply data is not available yet.'}</strong>${state.capabilities.comments ? 'No replies in this view need your attention.' : 'Open the comments and Notes pages in Substack with the connector installed, then sync again.'}</div>`;
   }
 
   function renderCadence(datedPosts) {
@@ -284,19 +297,20 @@
     weeks.forEach((count) => { const bar = document.createElement('i'); bar.style.height = `${Math.max(4, count / max * 100)}%`; bar.title = `${count} post${count === 1 ? '' : 's'}`; chart.appendChild(bar); });
     $('#cadenceValue').textContent = average.toFixed(1);
     $('#chartLabels').innerHTML = `<span>${formatDate(start)}</span><span>${formatDate(last)}</span>`;
-    $('#cadenceInsight').innerHTML = `<span>⌁</span><b>${weeks.filter(Boolean).length} active weeks.</b> ${weeks.reduce((sum, value) => sum + value, 0)} posts published during this 12-week window.`;
+    const provenance = state.sources.publicAt ? 'Public Substack feed' : (state.sources.connectorAt ? 'Imported and locally synchronized post dates' : 'Imported post dates');
+    $('#cadenceInsight').innerHTML = `<span>⌁</span><b>${weeks.filter(Boolean).length} active weeks.</b> ${weeks.reduce((sum, value) => sum + value, 0)} posts in this 12-week window · ${provenance}.`;
   }
 
   function engagement(post) {
-    if (post.openRate !== null) return { value: post.openRate, label: 'open rate', display: formatPercent(post.openRate) };
-    if (post.views !== null) return { value: post.views, label: 'views', display: post.views.toLocaleString() };
-    if (post.opens !== null) return { value: post.opens, label: 'opens', display: post.opens.toLocaleString() };
-    if (post.likes !== null || post.comments !== null) { const value = (post.likes || 0) + (post.comments || 0); return { value, label: 'interactions', display: value.toLocaleString() }; }
+    if (post.openRate !== null && post.openRate > 0) return { value: post.openRate, label: 'open rate', display: formatPercent(post.openRate) };
+    if (post.views !== null && post.views > 0) return { value: post.views, label: 'views', display: post.views.toLocaleString() };
+    if (post.opens !== null && post.opens > 0) return { value: post.opens, label: 'opens', display: post.opens.toLocaleString() };
+    if (post.likes !== null || post.comments !== null) { const value = (post.likes || 0) + (post.comments || 0); return value > 0 ? { value, label: 'interactions', display: value.toLocaleString() } : null; }
     return null;
   }
 
   function renderTopContent() {
-    const ranked = state.posts.map((post) => ({ post, metric: engagement(post) })).filter((item) => item.metric).sort((a, b) => b.metric.value - a.metric.value).slice(0, 3);
+    const ranked = state.posts.map((post) => ({ post, metric: engagement(post) })).filter((item) => item.metric && item.post.title && item.post.title !== 'Untitled post').sort((a, b) => b.metric.value - a.metric.value).slice(0, 3);
     $('#topContentList').className = ranked.length ? '' : 'empty compact';
     $('#topContentList').innerHTML = ranked.length ? ranked.map(({ post, metric }, index) => `<div class="content-row"><span class="rank">${String(index + 1).padStart(2, '0')}</span><div><strong>${escapeHTML(post.title)}</strong><p>${post.date ? formatDate(new Date(post.date)) : 'Date not available'}</p></div><b>${metric.display}<small>${metric.label}</small></b></div>`).join('') : '<strong>No engagement data available.</strong>The export does not contain post statistics.';
   }
@@ -328,35 +342,54 @@
     Object.values(value).forEach((child) => walkRecords(child, visit, seen));
   }
 
-  function recordKind(row) {
+  function recordKind(row, url = '') {
     const keys = Object.keys(row).map(normalizeHeader);
     const has = (...names) => names.some((name) => keys.includes(name));
     if (has('subscription_status', 'subscriber_status', 'is_paid') && has('email', 'email_address')) return 'subscriber';
-    if (has('comment_id', 'parent_comment_id', 'reply_to_id') || (has('body', 'comment') && has('post_id'))) return 'comment';
+    if (has('comment_id', 'parent_comment_id', 'reply_to_id') || (has('body', 'comment', 'text') && (has('post_id') || /comment|note|repl/i.test(url)))) return 'comment';
     if (has('post_id', 'published_at', 'post_date', 'email_open_rate', 'open_rate') && has('title', 'post_title', 'subject')) return 'post';
     return '';
   }
 
+  function normalizeCapturedRecord(record) {
+    const normalized = {};
+    Object.entries(record).forEach(([key, value]) => {
+      const cleanKey = normalizeHeader(key);
+      if (value === null || typeof value !== 'object') normalized[cleanKey] = String(value ?? '');
+      else if (/^(user|author|commenter|profile)$/.test(cleanKey)) {
+        if (value.name || value.display_name) normalized.author_name = String(value.name || value.display_name);
+        if (value.email) normalized.user_email = String(value.email);
+        if (value.id) normalized.author_id = String(value.id);
+      }
+    });
+    return normalized;
+  }
+
   function ingestConnectorPayload(payload) {
     const before = { subscribers: state.subscribers.length, posts: state.posts.length, comments: state.comments.length };
-    (payload.captures || []).forEach((capture) => walkRecords(capture.data, (record) => {
-      const normalized = Object.fromEntries(Object.entries(record).map(([key, value]) => [normalizeHeader(key), typeof value === 'object' ? '' : String(value ?? '')]));
-      const kind = recordKind(normalized);
-      if (kind === 'subscriber') state.subscribers.push(normalized);
-      else if (kind === 'comment') state.comments.push(normalized);
-      else if (kind === 'post') mergePosts([normalized]);
-    }));
+    (payload.captures || []).forEach((capture) => {
+      if (/comment|note|repl/i.test(capture.url || '')) state.capabilities.comments = true;
+      if (/subscriber|audience|member/i.test(capture.url || '')) state.capabilities.subscribers = true;
+      walkRecords(capture.data, (record) => {
+      const normalized = normalizeCapturedRecord(record);
+      const kind = recordKind(normalized, capture.url);
+      if (kind === 'subscriber') { state.subscribers.push(normalized); state.capabilities.subscribers = true; }
+      else if (kind === 'comment') { state.comments.push(normalized); state.capabilities.comments = true; }
+      else if (kind === 'post') { mergePosts([normalized]); state.capabilities.posts = true; if (get(normalized, aliases.openRate) || get(normalized, aliases.views) || get(normalized, aliases.opens) || get(normalized, aliases.likes)) state.capabilities.engagement = true; }
+      });
+    });
     dedupeRows(state.subscribers, aliases.email);
     dedupeRows(state.comments, aliases.id);
     deriveReplies();
     if (payload.feedXml) ingestFeed(payload.feedXml);
-    state.sources.connectorAt = payload.capturedAt || new Date().toISOString();
+    if ((payload.captures || []).length || payload.feedXml) state.sources.connectorAt = payload.capturedAt || new Date().toISOString();
     const fresh = deriveDashboard();
     const previous = loadSaved();
     const merged = mergeAvailable(previous, fresh);
-    saveDerived(merged); render(merged);
-    const added = (state.subscribers.length - before.subscribers) + (state.posts.length - before.posts) + (state.comments.length - before.comments);
-    return added;
+    const counts = { subscribers: Math.max(0, state.subscribers.length - before.subscribers), posts: Math.max(0, state.posts.length - before.posts), comments: Math.max(0, state.comments.length - before.comments), responses: (payload.captures || []).length };
+    state.sources.connectorSummary = `${counts.posts} posts · ${counts.subscribers} subscribers · ${counts.comments} comments`;
+    merged.sources = state.sources; merged.capabilities = state.capabilities; saveDerived(merged); render(merged);
+    return counts;
   }
 
   function dedupeRows(rows, keys) {
@@ -376,7 +409,7 @@
       published_at: item.querySelector('pubDate, published, updated')?.textContent || '',
       url: item.querySelector('link')?.getAttribute('href') || item.querySelector('link')?.textContent || ''
     })));
-    if (items.length) state.sources.publicAt = new Date().toISOString();
+    if (items.length) { state.sources.publicAt = new Date().toISOString(); state.capabilities.posts = true; }
   }
 
   function loadSaved() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } }
@@ -393,8 +426,11 @@
     const button = $('#syncButton'); button.disabled = true; button.innerHTML = '<span>↻</span> Syncing…';
     try {
       const payload = await requestConnector();
-      const added = ingestConnectorPayload(payload);
-      showToast(`Local sync complete · ${added} records refreshed`);
+      const counts = ingestConnectorPayload(payload);
+      const found = counts.posts + counts.subscribers + counts.comments;
+      showToast(found
+        ? `Sync complete · ${counts.posts} posts, ${counts.subscribers} subscribers, ${counts.comments} comments refreshed`
+        : `Sync connected, but no dashboard data was recognized from ${counts.responses} captured responses`);
     } catch (error) {
       showToast('Connector not detected — opening setup help');
       $('#connectorModal').hidden = false;
@@ -425,6 +461,11 @@
   $('#menuButton').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
   $('#syncButton').addEventListener('click', syncNow);
   $('#connectorHelp').addEventListener('click', () => { $('#connectorModal').hidden = false; });
+  $('#clearDataButton').addEventListener('click', () => {
+    if (!window.confirm('Clear imported and synchronized Pulse data from this browser?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    window.location.reload();
+  });
   $('#connectorClose').addEventListener('click', () => { $('#connectorModal').hidden = true; });
   $('#connectorModal').addEventListener('click', (event) => { if (event.target === $('#connectorModal')) $('#connectorModal').hidden = true; });
   $$('.nav-item[data-section]').forEach((button) => button.addEventListener('click', () => { $$('.nav-item[data-section]').forEach((item) => item.classList.remove('active')); button.classList.add('active'); $('#sidebar').classList.remove('open'); if (button.dataset.section === 'inbox') $('#replyPanel').scrollIntoView({ behavior: 'smooth' }); }));

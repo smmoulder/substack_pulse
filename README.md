@@ -22,7 +22,9 @@ A calm, human-first analytics dashboard for Stuart Moulder's Substack publicatio
 
 Pulse recognizes subscriber, post/statistics, comment/reply, note, and payment/revenue CSV files by filename and column headers. Export formats can vary; metrics whose supporting columns are absent remain marked **Not available**. For reply detection, a thread is considered waiting when a reader's root comment has no reply authored by **Stuart Moulder**. No selected file is uploaded or sent over the network.
 
-If the file picker appears to do nothing, confirm that the downloaded Substack archive has been extracted first. Select the `.csv` files inside the extracted folder rather than the `.zip` file. The import dialog reports the number of files and rows parsed, and it can import the same filenames again after a newer export is downloaded.
+If the file picker appears to do nothing, confirm that the downloaded Substack archive has been extracted first. Select the `.csv` files inside the extracted folder rather than the `.zip` file. A spreadsheet with columns such as **Title, Artist, Album, Genre, Plays** is an Apple Music library export—not a Substack export—and Pulse now rejects it with a specific explanation. The import dialog reports the number of recognized files and rows, identifies skipped files, and can import the same filenames again after a newer export is downloaded.
+
+The source strip explains where displayed values came from. Publishing cadence can come from the public Substack feed even when subscriber and engagement analytics remain unavailable. Use **Clear data** in that strip to remove an incorrect or stale import before trying again.
 
 ## Optional local live connector
 
@@ -34,6 +36,8 @@ The [`extension`](extension/) directory contains an unpacked Manifest V3 browser
 4. Return to Pulse and select **Sync now**.
 
 This connector intentionally does not handle passwords, cookies, authorization headers, or session tokens. It depends on the response formats used by Substack's publisher dashboard, which are not a stable public API and may change. The CSV snapshot remains the reliable fallback.
+
+After every sync, Pulse reports how many post, subscriber, and comment records it recognized. A successful connection with zero recognized comments does **not** mean there are zero unanswered replies; the reply inbox remains unavailable until a comments or Notes response has actually been captured. Browse those pages in Substack and sync again.
 
 ## Run locally
 
