@@ -19,10 +19,8 @@
         <span>Substack <b>Pulse</b></span>
       </a>
       <nav aria-label="Primary navigation">
-        <button class="nav-item active" data-section="overview"><span class="nav-icon">⌂</span>Overview</button>
-        <button class="nav-item" data-section="inbox"><span class="nav-icon">↳</span>Reply inbox<span class="nav-count" id="navCount">0</span></button>
-        <button class="nav-item" data-section="content"><span class="nav-icon">▤</span>Content</button>
-        <button class="nav-item" data-section="audience"><span class="nav-icon">♙</span>Audience</button>
+        <button class="nav-item active" data-view-nav="posts"><span class="nav-icon">▤</span>Posts<span class="nav-count" id="navCount">0</span></button>
+        <button class="nav-item" data-view-nav="notes"><span class="nav-icon">⌁</span>Notes<span class="nav-count" id="navNotesCount">0</span></button>
       </nav>
       <div class="sidebar-bottom">
         <button class="nav-item" id="settingsButton"><span class="nav-icon">⚙</span>Settings</button>
@@ -51,6 +49,7 @@
           <span><i class="source-dot muted"></i><b>Private analytics</b><em id="privateSource">No CSV snapshot</em></span>
           <span><i class="source-dot muted"></i><b>Public posts</b><em id="publicSource">Not connected</em></span>
           <span><i class="source-dot muted"></i><b>Local connector</b><em id="connectorSource">Extension not detected</em></span>
+          <span class="runtime-source"><b>Running</b><em id="runtimeSource">checking build…</em></span>
           <button id="connectorHelp" type="button">Setup help</button>
           <button id="clearDataButton" type="button">Clear data</button>
         </section>

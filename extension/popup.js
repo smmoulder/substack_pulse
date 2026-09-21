@@ -1,4 +1,6 @@
 'use strict';
+const manifest = chrome.runtime.getManifest();
+document.querySelector('#build').textContent = `Extension ${manifest.version} · ID ${chrome.runtime.id}`;
 chrome.storage.local.get(['captures', 'lastCaptureAt'], ({ captures = [], lastCaptureAt }) => {
   document.querySelector('#status').textContent = captures.length ? `${captures.length} local dashboard responses · last capture ${new Date(lastCaptureAt).toLocaleString()}` : 'No dashboard responses captured yet.';
 });

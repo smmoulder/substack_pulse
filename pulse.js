@@ -3,6 +3,7 @@
 
   const OWNER_NAME = 'Stuart Moulder';
   const OWNER_ID = '4912487';
+  const APP_RELEASE = '2026.09.21-live-tabs';
   const STORAGE_KEY = 'substack-pulse-derived-v1';
   const LIVE_STORAGE_KEY = 'substack-pulse-live-v1';
   const state = { files: [], subscribers: [], posts: [], comments: [], revenues: [], replies: [], dismissed: [], activeFilter: 'all', sources: {}, capabilities: {}, datasets: {}, range: '30', live: null, activeView: 'posts' };
@@ -607,6 +608,7 @@
     $('#notesTotal').textContent = live.notes.length;
     $('#notesWaiting').textContent = live.noteReplies.length;
     $('#notesWaitingBadge').textContent = live.noteReplies.length;
+    $('#navNotesCount').textContent = live.noteReplies.length;
     $('#notesList').innerHTML = live.notes.length ? live.notes.map((note) => `<article class="note-item"><p>${escapeHTML(note.text || 'Note text unavailable.')}</p><small>${formatDate(new Date(note.date))}</small>${note.url ? `<a href="${escapeHTML(note.url)}" target="_blank" rel="noopener">Open Note ↗</a>` : ''}</article>`).join('') : '<div class="empty"><strong>No Notes found.</strong>No public Notes were returned for the last 15 days.</div>';
     $('#notesReplyList').innerHTML = replyCards(live.noteReplies.filter((reply) => !state.dismissed.includes(reply.id)));
   }
@@ -617,10 +619,23 @@
       if (!response.ok) { const failure = await response.json().catch(() => ({})); throw new Error(failure.error || `HTTP ${response.status}`); }
       const live = normalizeLiveData(await response.json());
       localStorage.setItem(LIVE_STORAGE_KEY, JSON.stringify(live)); renderLive(live);
+      return { ok: true, live };
     } catch (error) {
       const cached = JSON.parse(localStorage.getItem(LIVE_STORAGE_KEY) || 'null');
       if (cached) renderLive(cached, `Live refresh failed (${error.message}). Showing the last good data from ${formatDate(new Date(cached.fetchedAt))}.`);
       else { $('#liveWarning').hidden = false; $('#liveWarning').textContent = `Live data is unavailable: ${error.message}. The local service solves browser cross-origin restrictions only; it still needs a network path that can reach Substack.`; $('#dataAsOf').textContent = 'Live data unavailable'; }
+      return { ok: false, error, cached: Boolean(cached) };
+    }
+  }
+
+  async function showRuntimeVersion() {
+    try {
+      const response = await fetch('/api/version', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const version = await response.json();
+      $('#runtimeSource').textContent = `${version.commit} · ${version.directory}`;
+    } catch {
+      $('#runtimeSource').textContent = `${APP_RELEASE} · static host (no local service)`;
     }
   }
   function saveDerived(data) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch { /* The dashboard still works for this session. */ } }
@@ -776,16 +791,18 @@
 
   async function syncNow() {
     const button = $('#syncButton'); button.disabled = true; button.innerHTML = '<span>↻</span> Syncing…';
+    const publicResult = await refreshLiveData();
     try {
       const payload = await requestConnector();
       const counts = ingestConnectorPayload(payload);
+      if (publicResult.ok) renderLive(publicResult.live);
       const found = counts.posts + counts.subscribers + counts.comments;
       showToast(found
-        ? `Sync complete · ${counts.posts} posts, ${counts.subscribers} subscribers, ${counts.comments} comments refreshed`
-        : `Sync connected, but no dashboard data was recognized from ${counts.responses} captured responses`);
+        ? `Public ${publicResult.ok ? 'refreshed' : 'warning'} · connector: ${counts.posts} posts, ${counts.subscribers} subscribers, ${counts.comments} comments`
+        : `Public ${publicResult.ok ? 'refreshed' : 'warning'} · connector had ${counts.responses} captures but no recognized comments`);
     } catch (error) {
-      showToast('Connector not detected — opening setup help');
-      $('#connectorModal').hidden = false;
+      if (publicResult.ok) showToast('Public Posts and Notes refreshed · connector not detected');
+      else { showToast('Public refresh failed and connector was not detected'); $('#connectorModal').hidden = false; }
     } finally { button.disabled = false; button.innerHTML = '<span>↻</span> Sync now'; }
   }
 
@@ -829,19 +846,21 @@
   });
   $('#connectorClose').addEventListener('click', () => { $('#connectorModal').hidden = true; });
   $('#connectorModal').addEventListener('click', (event) => { if (event.target === $('#connectorModal')) $('#connectorModal').hidden = true; });
-  $$('.nav-item[data-section]').forEach((button) => button.addEventListener('click', () => { $$('.nav-item[data-section]').forEach((item) => item.classList.remove('active')); button.classList.add('active'); $('#sidebar').classList.remove('open'); if (button.dataset.section === 'inbox') $('#replyPanel').scrollIntoView({ behavior: 'smooth' }); }));
-
   function selectPublicationView(view) {
     state.activeView = view;
     $('#postsView').hidden = view !== 'posts'; $('#notesView').hidden = view !== 'notes';
     $('#postsTab').classList.toggle('active', view === 'posts'); $('#notesTab').classList.toggle('active', view === 'notes');
     $('#postsTab').setAttribute('aria-selected', String(view === 'posts')); $('#notesTab').setAttribute('aria-selected', String(view === 'notes'));
+    $$('[data-view-nav]').forEach((button) => button.classList.toggle('active', button.dataset.viewNav === view));
+    $('#sidebar').classList.remove('open');
   }
   $('#postsTab').addEventListener('click', () => selectPublicationView('posts'));
   $('#notesTab').addEventListener('click', () => selectPublicationView('notes'));
+  $$('[data-view-nav]').forEach((button) => button.addEventListener('click', () => selectPublicationView(button.dataset.viewNav)));
 
   $('#todayLabel').textContent = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
   restoreDerived();
   renderReplies();
+  showRuntimeVersion();
   refreshLiveData();
 })();

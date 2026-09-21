@@ -25,3 +25,5 @@ You do not need to remove and re-add the extension unless its folder moved or Ch
 The connector does not read or store passwords, cookies, request headers, or session tokens. It relies on undocumented dashboard response shapes, so Substack changes may require updates to the normalizer.
 
 Use **Export redacted diagnostics** in the extension popup to download the locally stored, already-redacted response shapes when a thread is missing identity, title, history, or link information. Review the JSON before sharing it; although credentials are removed, it can still contain reader and publication content.
+
+The popup displays the installed connector version and Chrome extension ID. For this release it must show **Extension 0.2.0**. Chrome does not expose an unpacked extension's filesystem directory to extension JavaScript; confirm the **Loaded from** path on the extension's details page in `chrome://extensions`.

@@ -3,6 +3,7 @@
 const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const PORT = Number(process.env.PORT || 8000);
 const ROOT = __dirname;
@@ -10,6 +11,15 @@ const PUBLICATION = 'https://smmoulder.substack.com';
 const SUBSTACK = 'https://substack.com';
 const OWNER_ID = '4912487';
 const MAX_POSTS = 100;
+
+function buildInfo() {
+  let commit = process.env.PULSE_COMMIT || 'unknown';
+  if (commit === 'unknown') {
+    try { commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); }
+    catch { /* Git is optional when the app is launched from a downloaded archive. */ }
+  }
+  return { commit, directory: ROOT, server: 'node-local-bridge' };
+}
 
 async function getJson(url) {
   const response = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'SubstackPulse/1.0' }, signal: AbortSignal.timeout(15000) });
@@ -112,6 +122,11 @@ async function collectLiveData(fetchJson = getJson) {
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 async function handler(request, response) {
+  if (request.url === '/api/version') {
+    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    response.end(JSON.stringify(buildInfo()));
+    return;
+  }
   if (request.url === '/api/live') {
     try {
       const data = await collectLiveData();
@@ -136,4 +151,4 @@ async function handler(request, response) {
 
 if (require.main === module) http.createServer(handler).listen(PORT, () => console.log(`Substack Pulse: http://localhost:${PORT}`));
 
-module.exports = { collectLiveData, handler, records, responseIsComplete };
+module.exports = { buildInfo, collectLiveData, handler, records, responseIsComplete };

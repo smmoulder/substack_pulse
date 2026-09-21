@@ -77,3 +77,13 @@ node server.js
 ```
 
 Then open <http://localhost:8000>.
+
+Do not open `index.html` directly and do not use `python -m http.server`: those launch the visual shell but cannot provide `/api/live`. The source strip shows the short Git commit and absolute directory reported by the running Node process, making it possible to confirm exactly which checkout is serving Pulse. **Sync now** refreshes the public Posts and Notes endpoints first, then supplements analytics from the optional connector; it no longer means “connector captures only.”
+
+After updating this checkout:
+
+1. Stop the old Node process and run `node server.js` from the updated repository directory.
+2. Open <http://localhost:8000> and hard-refresh it; verify the **Running** entry shows the expected commit and directory.
+3. If files under `extension/` changed, open `chrome://extensions`, reload **Substack Pulse Local Connector**, then refresh every open Substack tab.
+4. The extension popup should report version **0.2.0** and its extension ID. Browse relevant Substack pages and return to Pulse.
+5. Select **Sync now**. Pulse will either display a fresh **Data as of** timestamp or retain the previous timestamp with a visible source-specific warning.
