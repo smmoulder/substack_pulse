@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Substack Pulse Local Connector",
+  "version": "0.1.0",
+  "description": "Privately connects Stuart Moulder's signed-in Substack dashboard to Substack Pulse on this device.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://substack.com/*", "https://*.substack.com/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Substack Pulse Connector" },
+  "content_scripts": [
+    {
+      "matches": ["https://substack.com/*", "https://*.substack.com/*"],
+      "js": ["page-observer.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://substack.com/*", "https://*.substack.com/*"],
+      "js": ["capture-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "https://smmoulder.github.io/substack_pulse/*"],
+      "js": ["dashboard-bridge.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

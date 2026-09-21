@@ -1,86 +1,79 @@
-# Starweaver
+# Substack Pulse
 
-A fast, atmospheric browser game about weaving through a collapsing starfield. Collect luminous sparks, dodge void shards, and build a multiplier before the clock runs out—or the ship's three hull points are lost.
+A calm, human-first analytics dashboard for Stuart Moulder's Substack publication. Pulse processes Substack export CSV files locally and surfaces the readers waiting for a response alongside every publication metric that can be supported by the export.
 
-## Play locally
+## Features
 
-No build step or dependencies are required. The server must be started **from the
-folder containing `index.html`**, not from a system folder.
+- Parses multiple Substack CSV export files entirely in the browser
+- Reply inbox derived from comment and note threads, with **never replied** and **follow up** filters
+- Subscriber totals, recent subscriber growth, paid conversion, post open rate, and revenue when those fields are present
+- Twelve-week publishing cadence calculated from post dates
+- Top content ranked using the best engagement measure available in the export
+- Clear **Not available** states instead of fabricated data
+- Responsive desktop and mobile layout
+- Derived dashboard data saved only in the browser's local storage
+- Public post-feed and private dashboard synchronization through the optional local Chrome extension
+- Fresh public Posts and Notes data loaded from Substack whenever the app opens
 
-### Download the game correctly
+## Live Posts and Notes
 
-Do not use the browser's **Save page as** command on each GitHub file. That saves
-GitHub's web page instead of the source file and may change extensions such as
-`styles.css` to `styles.htm`.
+Pulse now uses Stuart's public Substack endpoints through its small same-origin Node server. It loads up to 100 archive posts, each post's public comments, Stuart's profile Notes from the last 15 days, and each Note's replies. The **Posts** and **Notes** tabs have separate reply inboxes. A thread is waiting only when its newest captured comment is from someone other than Stuart's stable user ID (`4912487`); **Follow up** means Stuart appeared earlier in that same history, while **Never replied** means he did not.
 
-Use one of these methods instead:
+Conversation actions use a permalink returned by Substack when one is available. If Substack returns only the verified original post or Note URL, Pulse labels that fallback accurately. It never fabricates a comment URL, opens a profile/feed in its place, drafts a reply, or sends anything.
 
-- On the repository page, select **Code → Download ZIP**, extract the ZIP, and
-  open the extracted folder.
-- If Git is installed, run:
+Every page load requests fresh public data and displays a **Data as of** time. The last successful response is cached in this browser. If a later request fails, Pulse keeps showing that snapshot and displays a warning rather than replacing it with empty data.
 
-  ```powershell
-  git clone --branch work https://github.com/smmoulder/game.git C:\Starweaver
-  cd C:\Starweaver
-  ```
+The Posts inbox states exactly how many archive posts were checked, capped at 100, and the Notes inbox is explicitly limited to the last 15 days. “Never replied” is used only when the response explicitly confirms complete pagination/reply history and the archive author data confirms Stuart's user ID as `4912487`. An array response without completeness metadata is deliberately treated as incomplete and produces **Reply status unknown**, not a confident unanswered label.
 
-The folder should contain files named exactly `index.html`, `styles.css`,
-`game.js`, and `README.md`. In PowerShell, verify them with:
+### Endpoint verification status
 
-```powershell
-Get-ChildItem index.html, styles.css, game.js
-```
+On 20 September 2026, the Codex execution environment could not reach any of the four supplied URLs: its outbound Envoy CONNECT proxy returned HTTP 403 before a TLS connection to Substack was created. That is a Codex network restriction—not a Substack response, login challenge, or browser CORS result. Stuart separately confirmed that the archive URL loads JSON in his browser and that its array contains “Book Festival!” (`id: 216473740`, `comment_count: 5`) with author `user_id: 4912487`. The comments and Notes response shapes remain unverified until their bodies are successfully received; Pulse therefore parses defensively and does not claim those endpoints are public or complete merely because they were proposed.
 
-### Windows PowerShell
+The included Node service is specifically a same-origin bridge for browser CORS restrictions: the browser calls `/api/live`, and that local process makes the upstream request. It cannot bypass a host/network firewall, Substack authentication, or an upstream error. If the machine running it cannot reach Substack, Pulse retains the last good browser snapshot and shows the failure.
 
-1. Download or clone this repository and switch to the `work` branch.
-2. In File Explorer, open the downloaded `game` folder, right-click an empty area,
-   and choose **Open in Terminal**. Alternatively, change folders manually:
+## Importing a Substack export
 
-   ```powershell
-   cd "C:\path\to\game"
-   ```
+1. In Substack, request or download your publication export.
+2. Extract the downloaded archive.
+3. Open **Import data** in Pulse and select all of the extracted CSV files together, or drag them onto the import area.
 
-3. Confirm that `index.html` is in the current folder, then start the server:
+Pulse recognizes subscriber, post/statistics, comment/reply, note, and payment/revenue CSV files by filename and column headers. Export formats can vary; metrics whose supporting columns are absent remain marked **Not available**. For reply detection, a thread is considered waiting when a reader's root comment has no reply authored by **Stuart Moulder**. No selected file is uploaded or sent over the network.
 
-   ```powershell
-   Test-Path .\index.html
-   py -m http.server 8000
-   ```
+Imports are cumulative: selecting or dropping another CSV adds it to the existing local snapshot rather than replacing previously imported data. You can also select or drag several CSV files at once. Re-importing a file with the same filename replaces that file's older rows, while preserving the other imported files.
 
-   `Test-Path` should print `True`. If the `py` launcher is unavailable, use
-   `python3 -m http.server 8000` or `python -m http.server 8000` instead.
+If the file picker appears to do nothing, confirm that the downloaded Substack archive has been extracted first. Select the `.csv` files inside the extracted folder rather than the `.zip` file. A spreadsheet with columns such as **Title, Artist, Album, Genre, Plays** is an Apple Music library export—not a Substack export—and Pulse now rejects it with a specific explanation. The import dialog reports the number of recognized files and rows, identifies skipped files, and can import the same filenames again after a newer export is downloaded.
 
-4. Leave that terminal running and open <http://localhost:8000> in a browser.
-   Press `Ctrl+C` in the terminal when finished.
+The source strip explains where displayed values came from. Publishing cadence can come from the public Substack feed even when subscriber and engagement analytics remain unavailable. Use **Clear data** in that strip to remove an incorrect or stale import before trying again.
 
-### macOS or Linux
+The date-range control supports **Last 30 days**, **Last 90 days**, and **All time**. It recalculates recent subscribers, open rate, revenue, cadence, and top content from records in the selected period. Current total and paid subscriber counts remain current totals. **What's resonating** uses views when any view data is available for the selected period, otherwise opens, then open rate, then combined likes and comments; the metric in use is displayed in the card heading.
 
-From the cloned repository folder:
+Revenue uses two deliberately separate sources. A subscriber export's **Revenue** column is summed across subscribers and labeled **Cumulative revenue from exported subscribers**; it is never filtered by the dashboard date range. Payment, payout, or transaction files are summed separately for the selected date range. Pulse ignores post `estimated_value` and never substitutes it for either revenue measure.
+
+Reply cards retain and display every traceable reader field supplied by the connector: name, handle, email, stable comment/root/thread IDs, article title or original Note excerpt, timestamp, and verified comment/thread/post/Note URL. Pulse groups messages by their root conversation and displays the latest relevant reader message separately from the original article or Note. The primary action prefers an exact comment/thread permalink; when only a verified original URL exists it is accurately labeled **Open original article** or **Open original Note**. Reader profiles are never substituted for conversation links.
+
+Pulse labels a conversation **Never replied** or **Follow up** only when the capture supplies a stable ID, identifiable author, timestamp, and complete reply history. It determines follow-up status from Stuart's own stable author evidence in that conversation—not from another reader's reply. Incomplete captures are labeled **Reply status unknown** with the missing evidence shown, while any independently verified conversation link remains available. Subscriber and post CSVs alone do not establish individual comment threads.
+
+## Optional local live connector
+
+The [`extension`](extension/) directory contains an unpacked Manifest V3 browser extension. It observes JSON responses that the signed-in Substack publisher dashboard already loads, removes credential-like fields, stores a limited local snapshot, and retrieves the public feed for `smmoulder.substack.com`. Pulse's **Sync now** button reads that snapshot without uploading it to an application server.
+
+1. Open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**.
+2. Select the project's `extension` folder.
+3. Sign in to Substack and visit the publisher dashboard pages containing the desired analytics, subscriber, post, and comment data.
+4. Return to Pulse and select **Sync now**.
+
+Because this is an unpacked extension, reload it from `chrome://extensions` after pulling changes to anything inside `extension/`, and then refresh open Substack tabs. Dashboard-only changes do not require an extension reload: refresh Pulse, and restart `node server.js` if the server file changed. Full update instructions are in [`extension/README.md`](extension/README.md#updating-an-existing-installation).
+
+This connector intentionally does not handle passwords, cookies, authorization headers, or session tokens. It depends on the response formats used by Substack's publisher dashboard, which are not a stable public API and may change. The CSV snapshot remains the reliable fallback.
+
+After every sync, Pulse reports how many post, subscriber, and comment records it recognized. A successful connection with zero recognized comments does **not** mean there are zero unanswered replies; the reply inbox remains unavailable until a comments or Notes response has actually been captured. Browse those pages in Substack and sync again.
+
+## Run locally
+
+No install or build step is required. Node 18 or newer is needed because the local service provides the same-origin `/api/live` bridge used when browser cross-origin rules prevent a direct request. The machine running it must itself be able to reach Substack. From the project directory, run:
 
 ```bash
-cd /path/to/game
-python3 -m http.server 8000
+node server.js
 ```
 
 Then open <http://localhost:8000>.
-
-> If the browser shows a directory listing or “file not found,” stop the server
-> with `Ctrl+C`, navigate to the folder containing `index.html`, and run the
-> command again. A 404 only means that a browser tab or extension requested a URL
-> that is not in this folder; it does not mean Python itself failed. Requests such
-> as `/_filter/organizations` or `/_filter/repositories` are not made by
-> Starweaver—close other tabs using `localhost:8000`, or try another port with
-> `py -m http.server 8080` and open <http://localhost:8080>.
-
-## Controls
-
-- **Move:** `A` / `D`, arrow keys, pointer, or the on-screen buttons
-- **Pause:** `P` or the pause button
-- **Sound:** toggle from the top-right button
-
-The game stores the best score locally in the browser.
-
-## Gameplay
-
-Every five consecutive sparks increases the score multiplier, up to 5×. Missing a spark resets the streak. A void shard costs one hull point and 25 points; three hits end the run. The spawn rate and shard frequency rise over time.
