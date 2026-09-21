@@ -2,6 +2,8 @@
 
 A calm, human-first analytics dashboard for Stuart Moulder's Substack publication. Pulse processes Substack export CSV files locally and surfaces the readers waiting for a response alongside every publication metric that can be supported by the export.
 
+> **Current source release: Pulse Live Tabs 0.2.0 — published 21 September 2026.** The current interface has **Posts** and **Notes** navigation, the Node `/api/live` bridge, and connector version 0.2.0. This repository does not have GitHub Pages enabled, so GitHub stores the source but does not host a running copy. Pull `main` and start it with `node server.js`; the app's **Running** field will show the exact commit and checkout directory being served.
+
 ## Features
 
 - Parses multiple Substack CSV export files entirely in the browser
